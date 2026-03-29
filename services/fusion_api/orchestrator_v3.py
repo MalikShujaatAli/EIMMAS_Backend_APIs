@@ -9,7 +9,7 @@ import tempfile
 import uuid
 import jwt
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +22,7 @@ import re
 from dotenv import load_dotenv
 
 # IMPORT OUR DATABASE SETUP
-from database import init_db, get_db, ChatSession, ChatMessage
+from database import init_db, get_db, ChatSession, ChatMessage, SessionLocal
 
 # ---------------------------------------------------------
 # 1. PROFESSIONAL ENTERPRISE LOGGING
@@ -318,7 +318,7 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
         user_text = "[User communicated via non-verbal cues]"
 
     system_prompt = """
-    You are a licensed clinical psychologist responding to a client.
+    You are 'Eimma', an empathetic and licensed clinical psychologist assistant. 
     Your therapeutic approach is modeled after the 'Counsel Chat' dataset of professional therapist responses.
 
     --- STRICT LANGUAGE ENFORCEMENT (CRITICAL) ---
@@ -330,12 +330,13 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
     3. Chat history (contextual continuity)
 
     --- CORE BEHAVIOR (ORGANIC FLOW) ---
-    - Respond like a real human in a natural conversation, not a scripted therapist.
-    - Do NOT follow rigid templates (e.g., you do not need to validate, reflect, and ask a question in every single message).
-    - Blend understanding and response organically.
+    - Respond like a real human in a natural, warm conversation.
+    - NEVER use bullet points or numbered lists. Real humans do not speak in listicles. Focus on paragraph-based, conversational flow.
+    - Blend understanding and response organically. Use conversational bridges like "I see," "That makes sense," or "It's completely okay to feel that way."
     - Only ask a question if it genuinely adds value. It is completely acceptable to respond with just a supportive statement.
     
     --- PREMIUM ANTI-ROBOTIC & VARIATION RULES ---
+    - ANTI-HALLUCINATION (CRITICAL): Do NOT invent facts about the user's life, family, friends, or past. If they haven't explicitly told you something, do not assume it.
     - ACTIVE CONTEXTUAL RECALL (CRITICAL): Do not treat the user's latest message in isolation. If the user mentions a sudden mood shift (e.g., "My friend arrived" followed by "I want to hurt myself"), you MUST explicitly connect the dots. Acknowledge the shift and gently ask how the previous event triggered the current feeling.
     - MEMORY-AWARE ADAPTATION: Review the chat history and actively PREVENT repeating the same sentence structures, openings, or phrasing from your previous turns.
     - FORBIDDEN OPENERS: Do NOT start your sentences with "It sounds like...", "It seems like...", or "I hear that...". 
@@ -345,7 +346,7 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
     --- CLINICAL ETHICS & CONSTRAINTS (CRITICAL) ---
     - Do NOT diagnose the user or invent fake psychological conditions.
     - Do NOT provide medical or medication advice.
-    - IDENTITY: Do not proactively announce you are an AI. Act human. HOWEVER, if the user explicitly asks "Are you an AI?", "Are you real?", or "Are you a bot?", you MUST ethically disclose that you are an AI emotional support assistant.
+    - IDENTITY: Do not proactively announce you are an AI. Act human. HOWEVER, if the user explicitly asks "Are you an AI?", or "What is your name?", introduce yourself warmly as Eimma, an AI emotional support assistant.
 
     --- OPERATIONAL MODES ---
 
@@ -456,6 +457,7 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
 
 @app.post("/analyze")
 async def analyze_multimodal(
+    background_tasks: BackgroundTasks,
     session_id: str = Form(None), 
     text: str = Form(None),
     audio: UploadFile = File(None),
@@ -467,6 +469,13 @@ async def analyze_multimodal(
     start_time = time.time()
     logger.info(f"========== NEW REQUEST FROM: {user_email} ==========")
     
+    # ✅ SECURITY: Prevent 2GB maliciously large files from OOM-crashing the Orchestrator RAM
+    MAX_FILE_SIZE = 250 * 1024 * 1024 # 250MB Hard Limit
+    if audio and audio.size and audio.size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="Audio file exceeds 250MB limit.")
+    if video and video.size and video.size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="Video file exceeds 250MB limit.")
+
     if text is not None and text.strip() == "": text = None
     if not any([text, audio, image, video]): raise HTTPException(status_code=400, detail="Provide input.")
 
@@ -561,9 +570,16 @@ async def analyze_multimodal(
     user_msg = ChatMessage(message_id=str(uuid.uuid4()), session_id=session_id, role="user", content=text or "[Media]", detected_emotion=fused_emotion)
     ai_msg = ChatMessage(message_id=str(uuid.uuid4()), session_id=session_id, role="psychologist", content=llm_response)
     
-    db.add(user_msg)
-    db.add(ai_msg)
-    await db.commit()
+    # ✅ LIGHTNING SPEED: Non-blocking background DB commit!
+    # By creating a fresh thread session, we instantly send the HTTP JSON back to the user's phone, 
+    # and silently save the data to SQLite out of the critical path!
+    async def bg_save_logs(u_msg, a_msg):
+        async with SessionLocal() as bg_db:
+            bg_db.add(u_msg)
+            bg_db.add(a_msg)
+            await bg_db.commit()
+            
+    background_tasks.add_task(bg_save_logs, user_msg, ai_msg)
 
     latency = round(time.time() - start_time, 2)
     logger.info(f"========== FUSION COMPLETE: {fused_emotion.upper()} ({latency}s) ==========\n")

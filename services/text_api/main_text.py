@@ -129,8 +129,13 @@ try:
     custom_objects = {'AttentionLayer': AttentionLayer, 'Custom>AttentionLayer': AttentionLayer}
     model = keras.models.load_model(MODEL_PATH, custom_objects=custom_objects)
 
+    # ⚡ LIGHTNING SPEED FIX: Compile the Python model into a static C++ Graph!
+    @tf.function(reduce_retracing=True)
+    def compute_inference(tensor_input):
+        return model(tensor_input, training=False)
+
     dummy_text = pad_sequences(tokenizer.texts_to_sequences(["warmup"]), maxlen=MAX_LEN)
-    _ = model(dummy_text, training=False)
+    _ = compute_inference(dummy_text)
 
     logger.info("✅ Model loaded and warmed up!")
 except Exception as e:
@@ -144,20 +149,16 @@ except Exception as e:
 def health_check():
     return {"status": "online", "service": "Text Emotion API", "port": 8001}
 
+import asyncio
+
 @app.post("/predict_text")
 async def predict_text(input_data: TextInput):
     text = input_data.paragraph
 
     if not text or not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
-    
-    if len(text.split()) < 3:
-        return {
-        "sentences": [],
-        "final_emotion": "neutral",
-        "weighted_probabilities": {}
-        }
 
+    # Removed destructive length filter: "I'm sad" (2 words) should be analyzed!
     try:
         sentences = [clean_text(s) for s in sent_tokenize(text)]
         
@@ -175,7 +176,11 @@ async def predict_text(input_data: TextInput):
         truncating='post'
         )
 
-        predictions = model(padded_seqs, training=False).numpy()
+        # ⚡ LIGHTNING SPEED FIX: Offload computation to background thread to free up FastAPI!
+        def _run_model():
+            return compute_inference(padded_seqs).numpy()
+            
+        predictions = await asyncio.to_thread(_run_model)
 
         # soften predictions
         predictions = predictions ** 1.5
