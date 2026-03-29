@@ -469,134 +469,144 @@ async def analyze_multimodal(
     user_email: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    start_time = time.time()
-    logger.info(f"========== NEW REQUEST FROM: {user_email} ==========")
-    
-    # SECURITY: Prevent 2GB maliciously large files from OOM-crashing the Orchestrator RAM
-    MAX_FILE_SIZE = 250 * 1024 * 1024 # 250MB Hard Limit
-    if audio and audio.size and audio.size > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="Audio file exceeds 250MB limit.")
-    if video and video.size and video.size > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="Video file exceeds 250MB limit.")
+    try:
+        start_time = time.time()
+        logger.info(f"========== NEW REQUEST FROM: {user_email} ==========")
 
-    if text is not None and text.strip() == "": text = None
-    if not any([text, audio, image, video]): raise HTTPException(status_code=400, detail="Provide input.")
+        # SECURITY: Prevent 2GB maliciously large files from OOM-crashing the Orchestrator RAM
+        MAX_FILE_SIZE = 250 * 1024 * 1024 # 250MB Hard Limit
+        if audio and audio.size and audio.size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="Audio file exceeds 250MB limit.")
+        if video and video.size and video.size > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="Video file exceeds 250MB limit.")
 
-    # 1. Manage Session State
-    if not session_id:
-        session_id = str(uuid.uuid4())
-        session_title = (text[:30] + "...") if text else "New Conversation"
-        new_session = ChatSession(session_id=session_id, user_email=user_email, title=session_title)
-        db.add(new_session)
+        if text is not None and text.strip() == "": text = None
+        if not any([text, audio, image, video]): raise HTTPException(status_code=400, detail="Provide input.")
+
+        # 1. Manage Session State
+        if not session_id:
+            session_id = str(uuid.uuid4())
+            session_title = (text[:30] + "...") if text else "New Conversation"
+            new_session = ChatSession(session_id=session_id, user_email=user_email, title=session_title)
+            db.add(new_session)
+            await db.commit()
+
+        # 2. Extract and Format Media 
+        video_bytes = await video.read() if video else None
+        audio_bytes = await audio.read() if audio else None
+        image_bytes = await image.read() if image else None
+
+        if video_bytes and not audio_bytes:
+            extracted = await process_and_clean_audio(video_bytes, is_video=True)
+            if extracted: audio_bytes = extracted
+        elif audio_bytes:
+            audio_bytes = await process_and_clean_audio(audio_bytes, is_video=False)
+
+        if audio_bytes and not text:
+            text = await transcribe_audio_to_text(audio_bytes)
+
+        # Clean Whisper Hallucinations (e.g., if it just outputs "[Silence]", "(Music)", or empty space)
+        if text:
+            clean_text_check = re.sub(r'\[.*?\]|\(.*?\)', '', text).strip()
+            if len(clean_text_check) < 2:
+                text = None # Treat as empty if it's just background noise
+
+        # ---------------------------------------------------------
+        # PRE-FLIGHT SAFETY GATE (CIRCUIT BREAKER)
+        # ---------------------------------------------------------
+        is_critical_override = False
+        fused_emotion = "neutral"
+        raw_api_data = {}
+
+        if text:
+            text_lower = text.lower()
+            # Check for abuse or crisis using Semantic Patterns
+            if any(re.search(pat, text_lower) for pat in CRISIS_PATTERNS + ABUSIVE_PATTERNS):
+                logger.warning("SAFETY BLOCKADE TRIGGERED: Bypassing ML Models.")
+                is_critical_override = True
+                fused_emotion = "high_alert"
+                raw_api_data = {"system": "Blocked by Safety Pre-Flight."}
+
+        # ---------------------------------------------------------
+        # 3. Parallel API Processing (ONLY IF SAFE)
+        # ---------------------------------------------------------
+        if not is_critical_override:
+            # Avoid 300ms network handshakes by reusing our pre-warmed connection pool
+            tasks = []
+            if text: 
+                tasks.append(fetch_text_api(http_client, text))
+
+            # AUDIO GATE: Only send to Audio ML if Whisper confirmed someone actually spoke words!
+            if audio_bytes and text: 
+                tasks.append(fetch_file_api(http_client, audio_bytes, "clean.wav", "audio/wav", "audio", API_URLS["audio"]))
+
+            # IMAGE/VIDEO GATE: Image/Video models will handle "no face" on their own side
+            if image_bytes: 
+                tasks.append(fetch_file_api(http_client, image_bytes, image.filename, image.content_type, "image", API_URLS["image"]))
+            if video_bytes: 
+                tasks.append(fetch_file_api(http_client, video_bytes, video.filename, video.content_type, "video", API_URLS["video"]))
+
+            api_results = await asyncio.gather(*tasks)
+
+            # 4. Fusion
+            raw_api_data = {res["source"]: res["data"] for res in api_results if res["data"] is not None}
+            # THE GHOST GATE
+            # If there is no text AND all ML models failed to find a face/voice:
+            if not text and len(raw_api_data) == 0:
+                logger.error("Ghost Request: No text, no face, no voice.")
+                raise HTTPException(status_code=400, detail="Could not detect any voice or face in the provided media. Please try again in better lighting or speak clearer.")
+
+            fused_emotion = fuse_emotions(api_results)
+
+        # ---------------------------------------------------------
+        # 5. Memory Retrieval & LLM Generation
+        # ---------------------------------------------------------
+        stmt = select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.timestamp.desc()).limit(6)
+        result = await db.execute(stmt)
+        chat_history = list(reversed(result.scalars().all()))
+
+        # Send the fused emotion (or "high_alert") straight to the LLM
+        llm_response = await generate_psychologist_response(fused_emotion, text, chat_history)
+
+        # ---------------------------------------------------------
+        # 6. Save History & Return Response
+        # ---------------------------------------------------------
+        user_msg = ChatMessage(message_id=str(uuid.uuid4()), session_id=session_id, role="user", content=text or "[Media]", detected_emotion=fused_emotion)
+        ai_msg = ChatMessage(message_id=str(uuid.uuid4()), session_id=session_id, role="psychologist", content=llm_response)
+
+        # DEADLOCK FIX: Save sequentially using the active request's DB session.
+        # SQLite writes take ~2ms. The background task was causing a write-lock race
+        # condition with Flutter's immediate GET /sessions call, permanently freezing
+        # the Uvicorn worker. Sequential commit guarantees the lock is released
+        # BEFORE the HTTP response reaches Flutter.
+        db.add(user_msg)
+        db.add(ai_msg)
         await db.commit()
 
-    # 2. Extract and Format Media 
-    video_bytes = await video.read() if video else None
-    audio_bytes = await audio.read() if audio else None
-    image_bytes = await image.read() if image else None
+        latency = round(time.time() - start_time, 2)
+        logger.info(f"========== FUSION COMPLETE: {fused_emotion.upper()} ({latency}s) ==========\n")
 
-    if video_bytes and not audio_bytes:
-        extracted = await process_and_clean_audio(video_bytes, is_video=True)
-        if extracted: audio_bytes = extracted
-    elif audio_bytes:
-        audio_bytes = await process_and_clean_audio(audio_bytes, is_video=False)
+        show_emotion = not is_critical_override and len(raw_api_data) > 0
 
-    if audio_bytes and not text:
-        text = await transcribe_audio_to_text(audio_bytes)
-        
-    # Clean Whisper Hallucinations (e.g., if it just outputs "[Silence]", "(Music)", or empty space)
-    if text:
-        clean_text_check = re.sub(r'\[.*?\]|\(.*?\)', '', text).strip()
-        if len(clean_text_check) < 2:
-            text = None # Treat as empty if it's just background noise
+        return {
+            "session_id": session_id,
+            "fusion_result": {
+                "final_fused_emotion": fused_emotion, 
+                "show_emotion_ui": show_emotion,      # Flutter checks this to show/hide the UI!
+                "transcribed_text_used": text, 
+                "psychologist_response": llm_response,
+            },
+            "breakdown": raw_api_data 
+        }
 
-    # ---------------------------------------------------------
-    # PRE-FLIGHT SAFETY GATE (CIRCUIT BREAKER)
-    # ---------------------------------------------------------
-    is_critical_override = False
-    fused_emotion = "neutral"
-    raw_api_data = {}
-
-    if text:
-        text_lower = text.lower()
-        # Check for abuse or crisis using Semantic Patterns
-        if any(re.search(pat, text_lower) for pat in CRISIS_PATTERNS + ABUSIVE_PATTERNS):
-            logger.warning("SAFETY BLOCKADE TRIGGERED: Bypassing ML Models.")
-            is_critical_override = True
-            fused_emotion = "high_alert"
-            raw_api_data = {"system": "Blocked by Safety Pre-Flight."}
-
-    # ---------------------------------------------------------
-    # 3. Parallel API Processing (ONLY IF SAFE)
-    # ---------------------------------------------------------
-    if not is_critical_override:
-        # Avoid 300ms network handshakes by reusing our pre-warmed connection pool
-        tasks = []
-        if text: 
-            tasks.append(fetch_text_api(http_client, text))
-        
-        # AUDIO GATE: Only send to Audio ML if Whisper confirmed someone actually spoke words!
-        if audio_bytes and text: 
-            tasks.append(fetch_file_api(http_client, audio_bytes, "clean.wav", "audio/wav", "audio", API_URLS["audio"]))
-        
-        # IMAGE/VIDEO GATE: Image/Video models will handle "no face" on their own side
-        if image_bytes: 
-            tasks.append(fetch_file_api(http_client, image_bytes, image.filename, image.content_type, "image", API_URLS["image"]))
-        if video_bytes: 
-            tasks.append(fetch_file_api(http_client, video_bytes, video.filename, video.content_type, "video", API_URLS["video"]))
-        
-        api_results = await asyncio.gather(*tasks)
-
-        # 4. Fusion
-        raw_api_data = {res["source"]: res["data"] for res in api_results if res["data"] is not None}
-        # THE GHOST GATE
-        # If there is no text AND all ML models failed to find a face/voice:
-        if not text and len(raw_api_data) == 0:
-            logger.error("Ghost Request: No text, no face, no voice.")
-            raise HTTPException(status_code=400, detail="Could not detect any voice or face in the provided media. Please try again in better lighting or speak clearer.")
-            
-        fused_emotion = fuse_emotions(api_results)
-    
-    # ---------------------------------------------------------
-    # 5. Memory Retrieval & LLM Generation
-    # ---------------------------------------------------------
-    stmt = select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.timestamp.desc()).limit(6)
-    result = await db.execute(stmt)
-    chat_history = list(reversed(result.scalars().all()))
-    
-    # Send the fused emotion (or "high_alert") straight to the LLM
-    llm_response = await generate_psychologist_response(fused_emotion, text, chat_history)
-    
-    # ---------------------------------------------------------
-    # 6. Save History & Return Response
-    # ---------------------------------------------------------
-    user_msg = ChatMessage(message_id=str(uuid.uuid4()), session_id=session_id, role="user", content=text or "[Media]", detected_emotion=fused_emotion)
-    ai_msg = ChatMessage(message_id=str(uuid.uuid4()), session_id=session_id, role="psychologist", content=llm_response)
-    
-    # DEADLOCK FIX: Save sequentially using the active request's DB session.
-    # SQLite writes take ~2ms. The background task was causing a write-lock race
-    # condition with Flutter's immediate GET /sessions call, permanently freezing
-    # the Uvicorn worker. Sequential commit guarantees the lock is released
-    # BEFORE the HTTP response reaches Flutter.
-    db.add(user_msg)
-    db.add(ai_msg)
-    await db.commit()
-
-    latency = round(time.time() - start_time, 2)
-    logger.info(f"========== FUSION COMPLETE: {fused_emotion.upper()} ({latency}s) ==========\n")
-
-    show_emotion = not is_critical_override and len(raw_api_data) > 0
-
-    return {
-        "session_id": session_id,
-        "fusion_result": {
-            "final_fused_emotion": fused_emotion, 
-            "show_emotion_ui": show_emotion,      # Flutter checks this to show/hide the UI!
-            "transcribed_text_used": text, 
-            "psychologist_response": llm_response,
-        },
-        "breakdown": raw_api_data 
-    }
+    except httpx.RequestError as e:
+        logger.error(f"CRITICAL: Microservice connection failed. Details: {str(e)}")
+        raise HTTPException(status_code=503, detail="The AI analysis service is temporarily offline. Please try again in a moment.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"CRITICAL: Unexpected Orchestrator crash. Details: {str(e)}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred while processing your request. Our team has been notified.")
 # --- HISTORY ENDPOINTS ---
 @app.get("/sessions")
 async def get_user_sessions(user_email: str = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
