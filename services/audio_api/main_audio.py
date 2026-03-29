@@ -53,11 +53,34 @@ MAX_PAD_LEN = 174
 CONFIDENCE_THRESHOLD = 0.40
 MAX_FILE_SIZE_MB = 50
 MODEL_PATH = "audio_best_model.keras"
+TFLITE_PATH = "audio_model.tflite"
 
 INT_TO_EMOTION = {
     0: 'angry', 1: 'disgust', 2: 'fearful', 
     3: 'happy', 4: 'neutral', 5: 'sad', 6: 'surprised'
 }
+
+# --- 🚀 TFLITE BOOTSTRAP ---
+interpreter = None
+input_details = None
+output_details = None
+audio_model = None
+
+def load_audio_model():
+    global interpreter, input_details, output_details, audio_model
+    if os.path.exists(TFLITE_PATH):
+        logger.info(f"⚡ Loading TFLite Model: {TFLITE_PATH} (Optimized for CPU)")
+        interpreter = tf.lite.Interpreter(model_path=TFLITE_PATH)
+        interpreter.allocate_tensors()
+        input_details = interpreter.get_input_details()
+        output_details = interpreter.get_output_details()
+    elif os.path.exists(MODEL_PATH):
+        logger.warning(f"⚠️ {TFLITE_PATH} not found. Falling back to heavy TensorFlow: {MODEL_PATH}")
+        audio_model = tf.keras.models.load_model(MODEL_PATH)
+    else:
+        logger.error(f"❌ Critical Error: No audio model found in {os.getcwd()}.")
+
+load_audio_model()
 
 # ---------------------------------------------------------
 # 3. APP INITIALIZATION & MODEL LOAD
@@ -75,25 +98,20 @@ app.add_middleware(
 logger.info("Starting Production Audio Emotion API")
 logger.info("Loading AI Model into memory...")
 
-try:
-    if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(f"Model file {MODEL_PATH} not found.")
+def compute_inference(tensor):
+    """Infers emotion using either TFLite or Keras model automatically."""
+    global interpreter, input_details, output_details, audio_model
     
-    model = tf.keras.models.load_model(MODEL_PATH)
-    
-    # Compiled C++ Graph Wrapper — reduce_retracing for stable CPU-only inference
-    @tf.function(reduce_retracing=True)
-    def compute_inference(tensor_input):
-        return model(tensor_input, training=False)
-    
-    # PERFORMANCE WARMUP: Ensures the first request isn't slow
-    dummy_input = np.zeros((1, MAX_PAD_LEN, N_MFCC))
-    _ = compute_inference(dummy_input)
-    
-    logger.info("Audio Model loaded successfully!")
-except Exception as e:
-    logger.error(f"CRITICAL ERROR: Could not load model. {e}")
-    sys.exit(1)
+    if interpreter:
+        # TFLite Inference (Flash Fast on CPU)
+        interpreter.set_tensor(input_details[0]['index'], tensor)
+        interpreter.invoke()
+        return interpreter.get_tensor(output_details[0]['index'])[0]
+    elif audio_model:
+        # Full TF Inference (Slow on CPU)
+        return audio_model(tensor, training=False).numpy()[0]
+    else:
+        raise ValueError("No model loaded.")
 
 # ---------------------------------------------------------
 # 4. HIGH-SPEED PREPROCESSING (IN-RAM)
@@ -131,6 +149,12 @@ def get_features_fast(audio_bytes):
         else:
             mfccs = mfccs[:, :MAX_PAD_LEN]
             
+        # 🧪 ACCURACY FIX: Z-score Normalization
+        # Most RAVDESS models expect normalized MFCCs. This fixes 'False Angry' bias.
+        mean = np.mean(mfccs)
+        std = np.std(mfccs) + 1e-9
+        mfccs = (mfccs - mean) / std
+            
         # Reshape to (1, 174, 40) for the model
         return np.expand_dims(mfccs.T, axis=0).astype(np.float32)
     except Exception as e:
@@ -164,9 +188,8 @@ async def predict_audio(file: UploadFile = File(...)):
         if tensor is None:
             raise HTTPException(status_code=400, detail="Audio file is corrupted or silent.")
 
-        # DIRECT INFERENCE: Faster than model.predict(), compiled via XLA, run on separate thread
-        prediction_tensor = await asyncio.to_thread(compute_inference, tensor)
-        prediction = prediction_tensor.numpy()[0]
+        # INFERENCE (Flash Fast if TFLite is generated)
+        prediction = await asyncio.to_thread(compute_inference, tensor)
         
         # Post-processing
         winning_idx = int(np.argmax(prediction))
