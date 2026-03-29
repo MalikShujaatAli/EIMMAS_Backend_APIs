@@ -177,20 +177,31 @@ async def predict_image(file: UploadFile = File(...)):
         logger.error(f"Image prediction failed: {e}")
         return {"error": str(e)}
 
+def preprocess_face(face_gray):
+    """CLAHE + resize + normalize a single grayscale face into a model-ready tensor."""
+    face_clahe = clahe.apply(face_gray)
+    resized = cv2.resize(face_clahe, (112, 112), interpolation=cv2.INTER_CUBIC)
+    return (resized.astype("float32") / 255.0).reshape(112, 112, 1)
+
 def process_video_file(temp_path):
-    """Processes video fully in memory off the main event loop thread."""
+    """Processes video fully in memory off the main event loop thread.
+    Uses FPS-aware decimation (~1 frame/sec) and batch prediction."""
     cap = cv2.VideoCapture(temp_path)
-    all_probs = []
+    face_tensors = []
     
     try:
         if not cap.isOpened():
-            return all_probs
+            return []
             
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
         if total_frames <= 0:
-            return all_probs
+            return []
+
+        # ⚡ FPS-AWARE DECIMATION: Analyze exactly ~1 frame per second regardless of source FPS
+        # A 24fps video → every 24th frame. A 60fps video → every 60th frame.
+        frame_mod = max(1, int(fps)) if fps > 0 else 30
 
         # LIGHTNING SPEED: Linear reading is physically faster than OpenCV Set/Seek on an MP4
         frame_idx = 0
@@ -198,18 +209,24 @@ def process_video_file(temp_path):
             ret, frame = cap.read()
             if not ret: break
             
-            # ⚡ 66% ML WORKLOAD DROP: Analyze roughly 1 frame per second (Decimation)
-            if frame_idx % 30 == 0:
+            if frame_idx % frame_mod == 0:
                 face = extract_human_face(frame)
                 if face is not None:
-                    all_probs.append(analyze_emotion(face))
+                    face_tensors.append(preprocess_face(face))
             frame_idx += 1
                 
     finally:
         # Guarantee OpenCV releases the file handle even if an error occurs
         cap.release()
-        
-    return all_probs
+
+    if not face_tensors:
+        return []
+
+    # ⚡ BATCH PREDICTION: Stack all faces into one tensor and predict in a single TF graph call
+    # Eliminates per-frame graph entry overhead (N calls → 1 call)
+    batch = np.stack(face_tensors, axis=0)
+    all_preds = compute_vision_inference(batch).numpy()
+    return [all_preds[i] for i in range(all_preds.shape[0])]
 
 @app.post("/predict_video")
 async def predict_video(file: UploadFile = File(...)):

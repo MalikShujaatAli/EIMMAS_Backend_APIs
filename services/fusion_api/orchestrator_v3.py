@@ -258,6 +258,7 @@ def fuse_emotions(results):
         "angry": "anger", "anger": "anger",
         "sadness": "sad", "sad": "sad",
         "surprised": "surprise", "surprise": "surprise",
+        "disgust": "disgust",
         "love": "love"
     }
 
@@ -447,6 +448,8 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
             "fear": "It makes sense that you're feeling anxious or overwhelmed. You're in a safe space. What's on your mind?",
             "joy": "It's wonderful to see you feeling this way! What's been going well for you?",
             "surprise": "That sounds unexpected! How are you processing all of this?",
+            "disgust": "That sounds like something that really bothered you on a deep level. I'm here if you want to talk through it.",
+            "love": "It's beautiful that you're feeling this kind of warmth and connection. Tell me more about what's bringing this on.",
             "neutral": "I'm listening. How can we best support you right now?",
         }
         return fallback_responses.get(fused_emotion.lower(), fallback_responses["neutral"])

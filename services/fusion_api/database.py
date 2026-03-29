@@ -7,7 +7,7 @@ from sqlalchemy import Column, String, DateTime, ForeignKey, Text
 # 1. Setup SQLite Async Engine
 DATABASE_URL = "sqlite+aiosqlite:///./therapy_chats.db"
 engine = create_async_engine(DATABASE_URL, echo=False)
-AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+SessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
 # 2. Define the Database Tables
@@ -37,5 +37,5 @@ async def init_db():
 
 # 4. Database Session Generator for FastAPI
 async def get_db():
-    async with AsyncSessionLocal() as session:
+    async with SessionLocal() as session:
         yield session

@@ -182,7 +182,7 @@ async def predict_text(input_data: TextInput):
             
         predictions = await asyncio.to_thread(_run_model)
 
-        # soften predictions
+        # Sharpen predictions (amplify confidence gaps between top and lower classes)
         predictions = predictions ** 1.5
         predictions = predictions / predictions.sum(axis=1, keepdims=True)
     

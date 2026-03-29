@@ -7,6 +7,7 @@ import io
 # Must be set BEFORE importing tensorflow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import sys
 import time
@@ -80,8 +81,8 @@ try:
     
     model = tf.keras.models.load_model(MODEL_PATH)
     
-    # XLA Compilation Wrapper for lightning fast inference
-    @tf.function(jit_compile=True)
+    # Compiled C++ Graph Wrapper — reduce_retracing for stable CPU-only inference
+    @tf.function(reduce_retracing=True)
     def compute_inference(tensor_input):
         return model(tensor_input, training=False)
     
