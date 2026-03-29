@@ -67,7 +67,7 @@ load_dotenv()
 # ENVIRONMENT TOGGLE
 # Set to True for your Final FYP Presentation (Uses Groq 70B)
 # Set to False for daily testing and QA (Uses Cerebras 8B)
-USE_PRODUCTION_MODEL = False
+USE_PRODUCTION_MODEL = True
 
 # Groq Setup (Production)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -419,16 +419,17 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
                 model="llama-3.3-70b-versatile",
                 messages=messages,
                 temperature=0.3,
-                max_tokens=250
+                max_tokens=500
             )
         else:
-            logger.info("Using CEREBRAS (8B) for LLM Generation...")
-            chat_completion = await cerebras_client.chat.completions.create(
-                # model="llama3.1-8b",
+            # logger.info("Using CEREBRAS (8B) for LLM Generation...")
+            logger.info("Using GROQ (8B) for LLM Generation...")
+            # chat_completion = await cerebras_client.chat.completions.create(
+            chat_completion = await groq_client.chat.completions.create(
                 model="llama3.1-8b",
                 messages=messages,
                 temperature=0.3,
-                max_tokens=250
+                max_tokens=500
             )
 
         response = chat_completion.choices[0].message.content.strip()

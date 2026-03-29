@@ -1,0 +1,10 @@
+# Phase 8 Thesis: Modern Production Microservices (Current)
+
+## Strategic Intent
+Phase 8 was not an incremental upgrade — it was a complete re-architecture driven by a systematic audit of every remaining deficiency (documented in `problems to fix.txt`). The goal was to achieve a production-grade system that could handle concurrent mobile users without freezing, crashing, or leaking resources. Eight architectural loopholes were identified and methodically closed: event loop blocking, eager execution overhead, disk I/O bottlenecks, MFCC volume bias, video CPU saturation, NLTK cold-boot failures, database N+1 queries, and missing security controls.
+
+## Scope & Boundaries
+Phase 8 produced four microservices (`main_audio.py`, `main_video.py`, `main_text.py`, `orchestrator_v3.py`), a shared database module (`database.py`), a TFLite converter (`convert_audio_model.py`), an NLTK setup script (`setup_nltk.py`), and a multi-service Windows launcher (`start_servers.bat`). The orchestrator added capabilities that did not exist in any previous phase: Groq Llama-3.3-70B LLM integration with a therapeutic personality prompt, JWT HS256 authentication with email-based user isolation, async SQLite chat persistence, FFmpeg RAM-pipe audio extraction from video, weighted multimodal emotion fusion, a contradiction engine for affective masking detection, and pre-flight regex gates for crisis and abuse patterns.
+
+## Success Analysis
+Phase 8 resolved every identified flaw: `asyncio.to_thread()` eliminated event loop blocking. `@tf.function(reduce_retracing=True)` with warmup eliminated eager execution overhead. `soundfile.read()` from byte buffers and FFmpeg `pipe:0`/`pipe:1` eliminated disk I/O. Z-score MFCC normalization eliminated the "False Angry" bias. FPS-aware frame decimation with batch tensor stacking eliminated video CPU saturation. `setup_nltk.py` eliminated cold-boot failures. Bulk `delete().where()` eliminated N+1 database queries. JWT validation and regex pre-flight gates established security boundaries. The system is architecturally ready for production deployment behind a reverse proxy with horizontal scaling via Docker/Kubernetes.
