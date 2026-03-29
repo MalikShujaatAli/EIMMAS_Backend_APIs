@@ -180,14 +180,20 @@ async def process_and_clean_audio(file_bytes: bytes, is_video: bool = False) -> 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_out:
             out_path = temp_out.name
 
+        import subprocess
         # ✅ FIX: Resolved ffmpeg executable absolute path for Windows compatibility
         ffmpeg_exe = shutil.which("ffmpeg")
-        process = await asyncio.create_subprocess_exec(
-            ffmpeg_exe, "-y", "-i", in_path, "-vn", 
-            "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", out_path,
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
-        )
-        await process.communicate() 
+        
+        # ✅ FIX: Windows Asyncio loop raises NotImplementedError for subprocesses in some configurations.
+        # Offloading the synchronous subprocess.run to a background thread completely bypasses this!
+        def _run_ffmpeg():
+            return subprocess.run(
+                [ffmpeg_exe, "-y", "-i", in_path, "-vn", 
+                 "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", out_path],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        
+        process = await asyncio.to_thread(_run_ffmpeg)
         
         if process.returncode != 0: 
             logger.error("FFmpeg Conversion Failed!")
