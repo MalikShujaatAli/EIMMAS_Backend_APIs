@@ -93,22 +93,22 @@ print("✅ Model saved as emotion_model.h5")
 
 #### Block 3: Data Generator (Lines 12-29)
 - **What this solves**: Loading images from directory structure and normalizing pixel values to [0,1].
-- **Logical flaw — No augmentation**: Despite the variable being named `datagen`, only `rescale=1./255` is applied. No rotation, zoom, flip, or shift augmentation is configured. The Phase 8 Kaggle notebook adds `rotation_range=10`, `zoom_range=0.1`, `width_shift_range=0.1`, `height_shift_range=0.1`, `horizontal_flip=True`.
+- **Logical flaw — No augmentation**: Despite the variable being named `datagen`, only `rescale=1./255` is applied. No rotation, zoom, flip, or shift augmentation is configured. The Phase 9 Kaggle notebook adds `rotation_range=10`, `zoom_range=0.1`, `width_shift_range=0.1`, `height_shift_range=0.1`, `horizontal_flip=True`.
 - **Logical flaw — No class weighting**: The FER2013 dataset is heavily imbalanced (Happy: 8,989 images vs Disgust: 547 images). Without `class_weight` in `model.fit()`, the optimizer learns to ignore minority classes. This is the direct cause of Disgust's 3% recall.
-- **Logical flaw — 48×48 resolution**: FER2013 images are natively 48×48. This resolution is extremely low for capturing subtle facial muscle movements. The Phase 8 model uses 112×112.
+- **Logical flaw — 48×48 resolution**: FER2013 images are natively 48×48. This resolution is extremely low for capturing subtle facial muscle movements. The Phase 9 model uses 112×112.
 - **Logical flaw — No CLAHE**: Images are used as-is. Dark or poorly-lit faces have crushed histograms, losing contrast in critical facial features. CLAHE was first introduced in Phase 7 (`2nd attempt Video.txt`).
 
 #### Block 4: CNN Architecture (Lines 32-43)
 - **What this solves**: A minimal 3-layer CNN for spatial feature extraction.
 - **Architecture**: `Conv2D(32) → MaxPool → Conv2D(64) → MaxPool → Conv2D(128) → MaxPool → Flatten → Dense(128) → Dropout(0.5) → Dense(7, softmax)`.
-- **Logical flaw — Too shallow**: 3 convolutional layers cannot capture the hierarchical complexity of facial expressions (edges → eyebrow curves → full facial geometry). The Phase 8 model uses 4 convolutional blocks with BatchNormalization after each, and each block has progressively larger filter counts (64 → 128 → 256 → 512).
-- **Logical flaw — No BatchNormalization**: Without BatchNorm, internal covariate shift slows training and makes the model sensitive to learning rate. Every convolutional block in the Phase 8 model includes `BatchNormalization()`.
-- **Logical flaw — Single Dropout layer**: Only one `Dropout(0.5)` before the output. The Phase 8 model applies `Dropout(0.25)` after every convolutional block AND `Dropout(0.5)` before the final Dense layer.
+- **Logical flaw — Too shallow**: 3 convolutional layers cannot capture the hierarchical complexity of facial expressions (edges → eyebrow curves → full facial geometry). The Phase 9 model uses 4 convolutional blocks with BatchNormalization after each, and each block has progressively larger filter counts (64 → 128 → 256 → 512).
+- **Logical flaw — No BatchNormalization**: Without BatchNorm, internal covariate shift slows training and makes the model sensitive to learning rate. Every convolutional block in the Phase 9 model includes `BatchNormalization()`.
+- **Logical flaw — Single Dropout layer**: Only one `Dropout(0.5)` before the output. The Phase 9 model applies `Dropout(0.25)` after every convolutional block AND `Dropout(0.5)` before the final Dense layer.
 
 #### Block 5: Training (Lines 45-52)
 - **What this solves**: Running the training loop.
 - **Configuration**: `epochs=30`, `batch_size=64` (from the generator), `optimizer='adam'` with default learning rate (0.001).
-- **Logical flaw — No callbacks**: No `ModelCheckpoint` (best model is not saved), no `EarlyStopping` (training runs all 30 epochs even if overfitting), no `ReduceLROnPlateau` (learning rate never adapts). The Phase 8 notebooks use all three callbacks.
+- **Logical flaw — No callbacks**: No `ModelCheckpoint` (best model is not saved), no `EarlyStopping` (training runs all 30 epochs even if overfitting), no `ReduceLROnPlateau` (learning rate never adapts). The Phase 9 notebooks use all three callbacks.
 - **Logical flaw — No class_weight**: `model.fit()` is called without the `class_weight` parameter. The model optimizes for overall accuracy, which it achieves by learning to always predict "Happy" (the majority class).
 
 #### Block 6: Save (Lines 55-56)
@@ -128,7 +128,7 @@ print(tf.config.list_physical_devices('GPU'))
 #### Analysis
 - **What this solves**: Checking whether TensorFlow can see any GPU hardware.
 - **Context**: This was run before `1.py` to verify the development environment. The output determines whether `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` (disable GPU) should be set in later scripts.
-- **Descendants**: No direct code descendant. The GPU check concept survives implicitly in the Phase 8 services, which all set `CUDA_VISIBLE_DEVICES = "-1"` explicitly because they deploy on CPU-only servers.
+- **Descendants**: No direct code descendant. The GPU check concept survives implicitly in the Phase 9 services, which all set `CUDA_VISIBLE_DEVICES = "-1"` explicitly because they deploy on CPU-only servers.
 
 ---
 
@@ -157,8 +157,8 @@ weighted avg       0.56      0.57      0.56      7178
 - **Happy (78% precision, 82% recall)**: The best-performing class because smiling is visually distinctive even at low resolution, and Happy had the most training samples.
 - **Neutral (48% precision, 64% recall)**: High recall but low precision means the model predicted "neutral" too often — it was the "safe default" when uncertain.
 
-#### Comparison to Phase 8 Model
-The Phase 8 retrained model (FERPlus, 112×112, 4-block CNN, CLAHE, augmentation) achieves:
+#### Comparison to Phase 9 Model
+The Phase 9 retrained model (FERPlus, 112×112, 4-block CNN, CLAHE, augmentation) achieves:
 - Angry: 76% precision, 79% recall (vs 45%/51%)
 - Happy: 92% precision, 89% recall (vs 78%/82%)
 - Neutral: 82% precision, 86% recall (vs 48%/64%)
@@ -188,9 +188,9 @@ The Phase 8 retrained model (FERPlus, 112×112, 4-block CNN, CLAHE, augmentation
 
 Phase 1 is the genesis — there is no previous phase to diff against. The following files born in Phase 1 have descendants:
 
-| Phase 1 Artifact | Immediate Descendant | Ultimate Descendant (Phase 8) |
+| Phase 1 Artifact | Immediate Descendant | Ultimate Descendant (Phase 9) |
 |---|---|---|
 | `1.py` (model trainer) | `cnn model/1.ipynb` (same architecture in notebook form) | `Model notebooks.txt` lines 937-1665 (complete FERPlus Kaggle retraining) |
-| `emotion_model.h5` / `face_emotion_model.h5` | `emotion_api/face_emotion_model.h5` (loaded by Phase 6 monolith) | `fer_best_model.keras` (loaded by Phase 8 `main_video.py`) |
-| `2.py` (GPU check) | No direct descendant | Spiritual descendant: `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` in all Phase 8 services |
-| `classification_report.txt` (57% accuracy) | No direct descendant | Replaced by Phase 8 FERPlus report (81.03% accuracy) |
+| `emotion_model.h5` / `face_emotion_model.h5` | `emotion_api/face_emotion_model.h5` (loaded by Phase 6 monolith) | `fer_best_model.keras` (loaded by Phase 9 `main_video.py`) |
+| `2.py` (GPU check) | No direct descendant | Spiritual descendant: `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` in all Phase 9 services |
+| `classification_report.txt` (57% accuracy) | No direct descendant | Replaced by Phase 9 FERPlus report (81.03% accuracy) |

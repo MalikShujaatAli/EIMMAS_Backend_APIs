@@ -32,7 +32,7 @@ model.save("saved_model")
 - **Line 5**: `model.save("saved_model")` saves the model in TensorFlow's `SavedModel` directory format (a directory containing `saved_model.pb` and `variables/`). This is a prerequisite for ONNX conversion.
 - **Lines 8-9**: The actual conversion command is **commented out**. It was never executed from this script. The `tf2onnx` package would need to be installed separately.
 - **No error handling, no path checking, no output verification.**
-- **Phase 8 resolution**: ONNX was never pursued. The successful lightweight format conversion uses TFLite (`convert_audio_model.py`), not ONNX.
+- **Phase 9 resolution**: ONNX was never pursued. The successful lightweight format conversion uses TFLite (`convert_audio_model.py`), not ONNX.
 
 ### File: `7.py` (Complete Source)
 
@@ -84,7 +84,7 @@ def model_func(x):
 
 ## Header 3: Micro-Decision Log
 
-| Decision | Phase 5 Attempt | Phase 8 Resolution |
+| Decision | Phase 5 Attempt | Phase 9 Resolution |
 |---|---|---|
 | Target format: ONNX | `tf2onnx.convert` (commented out) | Abandoned; TFLite chosen instead |
 | Target format: TFLite→TF reverse | Impossible `@tf.function` wrapping | Forward conversion: `tf.lite.TFLiteConverter.from_keras_model()` |
@@ -99,10 +99,10 @@ def model_func(x):
 |---|---|
 | `6.py` | No descendant. ONNX path fully abandoned. |
 | `7.py` `representative_dataset()` | Conceptual descendant: `convert_audio_model.py`'s quantization settings |
-| `7.py` `@tf.function` wrapping | Correct usage appears in Phase 8: `@tf.function(reduce_retracing=True)` wrapping of `emotion_model(tensor, training=False)` (NOT the interpreter) |
+| `7.py` `@tf.function` wrapping | Correct usage appears in Phase 9: `@tf.function(reduce_retracing=True)` wrapping of `emotion_model(tensor, training=False)` (NOT the interpreter) |
 | `emotion_model.tflite` (48×48 face) | Replaced by `audio_model.tflite` (audio BiLSTM) — face model stays in `.keras` format and uses `@tf.function` instead of TFLite |
 
-**Key insight**: Phase 5 attempted the wrong conversions in the wrong directions. The eventual Phase 8 solution was:
+**Key insight**: Phase 5 attempted the wrong conversions in the wrong directions. The eventual Phase 9 solution was:
 - **Audio model**: Keras `.keras` → TFLite `.tflite` (via `convert_audio_model.py`) for CPU speed
 - **Vision model**: Keras `.keras` → `@tf.function` compiled graph (no format conversion; compilation happens at runtime)
 - **Text model**: Keras `.keras` → `@tf.function` compiled graph (same as vision)

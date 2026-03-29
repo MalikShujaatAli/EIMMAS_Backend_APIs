@@ -29,7 +29,7 @@ app.add_middleware(
 )
 ```
 - **What this solves**: Flutter mobile apps and web browsers require CORS headers. Without this middleware, every Flutter HTTP request would be rejected by the browser's same-origin policy.
-- **`allow_origins=["*"]`**: Allows ALL origins. Acceptable for development, dangerous in production (allows any website to call the API). Phase 8 retains this for development convenience but notes it should be restricted in production.
+- **`allow_origins=["*"]`**: Allows ALL origins. Acceptable for development, dangerous in production (allows any website to call the API). Phase 9 retains this for development convenience but notes it should be restricted in production.
 
 #### New: Auto-Rename Zip Fix (Lines 71-77)
 ```python
@@ -38,7 +38,7 @@ if os.path.exists(ZIPPED_MODEL_PATH) and not os.path.exists(MODEL_PATH):
         os.rename(ZIPPED_MODEL_PATH, MODEL_PATH)
 ```
 - **What this solves**: When model files were shared via WhatsApp or Google Drive, they were sometimes auto-compressed with a `.zip` extension appended (e.g., `audio_best_model.keras.zip`). This auto-rename silently fixes the filename at startup.
-- **Phase 8**: This workaround was removed because model distribution moved to proper file sharing without auto-compression.
+- **Phase 9**: This workaround was removed because model distribution moved to proper file sharing without auto-compression.
 
 #### New: Silence Trimming in API Context (Lines 99-103)
 ```python
@@ -55,7 +55,7 @@ file_size_mb = len(content) / (1024 * 1024)
 if file_size_mb > MAX_FILE_SIZE_MB:
     raise HTTPException(status_code=413, detail=...)
 ```
-- **`MAX_FILE_SIZE_MB = 10`**: Rejects files over 10MB. Phase 8's audio API increases this to 50MB. Phase 8's orchestrator uses 250MB for video files.
+- **`MAX_FILE_SIZE_MB = 10`**: Rejects files over 10MB. Phase 9's audio API increases this to 50MB. Phase 9's orchestrator uses 250MB for video files.
 - **HTTP 413**: Proper "Payload Too Large" status code, not a generic 400.
 
 #### New: `finally` Cleanup Block (Lines 191-195)
@@ -65,7 +65,7 @@ finally:
         os.remove(temp_audio_path)
 ```
 - **What this solves**: Guarantees temporary file deletion even if processing crashes. Without `finally`, a crash during `model.predict()` would leave orphaned `.wav` files on disk.
-- **Phase 8 resolution**: Temp files eliminated entirely via FFmpeg RAM pipes and `soundfile.read()` from byte buffers.
+- **Phase 9 resolution**: Temp files eliminated entirely via FFmpeg RAM pipes and `soundfile.read()` from byte buffers.
 
 #### Persistent Flaw: Synchronous `model.predict` (Line 164)
 ```python
@@ -84,8 +84,8 @@ face_detector = mp_face_detection.FaceDetection(model_selection=1, min_detection
 ```
 - **Replaces**: `face_cascade = cv2.CascadeClassifier(haarcascade...)` from Phase 6.
 - **`model_selection=1`**: Full-range model (works at various distances). `model_selection=0` would be short-range only.
-- **`min_detection_confidence=0.6`**: Still too low. Phase 8 increases to 0.75 after discovering that 0.6 admitted some non-human objects.
-- **API difference**: This uses `mp.solutions.face_detection` (MediaPipe's legacy Python solution API). Phase 8 uses `mediapipe.tasks.vision.FaceDetector` (the newer Tasks API) with a dedicated `.tflite` model file.
+- **`min_detection_confidence=0.6`**: Still too low. Phase 9 increases to 0.75 after discovering that 0.6 admitted some non-human objects.
+- **API difference**: This uses `mp.solutions.face_detection` (MediaPipe's legacy Python solution API). Phase 9 uses `mediapipe.tasks.vision.FaceDetector` (the newer Tasks API) with a dedicated `.tflite` model file.
 
 #### New: CLAHE Lighting Correction (Lines 68-69)
 ```python
@@ -116,7 +116,7 @@ if frame_id % 10 != 0:
     continue
 ```
 - Still samples every 10th frame regardless of source FPS. A 60fps video gets 6 samples/second; a 24fps video gets 2.4 samples/second.
-- Phase 8 fix: `frame_mod = max(1, int(fps))` ensures exactly 1 frame/second.
+- Phase 9 fix: `frame_mod = max(1, int(fps))` ensures exactly 1 frame/second.
 
 #### Persistent Flaw: Per-Frame Prediction (Line 212)
 ```python
@@ -146,7 +146,7 @@ class AttentionLayer(Layer):
 - **Weight shape change**: From `(dim,)` in `textemotion.py` to `(input_shape[-1], 1)` — a column vector. This changes the attention from a dot product with a 1D vector to a matrix multiplication yielding scalar scores.
 - **`initializer="normal"`**: Changed from `glorot_uniform` in `textemotion.py`. Normal initialization has higher variance, leading to more diverse initial attention scores.
 - **`K.tanh(K.dot(x, self.W) + self.b)`**: Bahdanau-style additive attention with tanh activation. Replaces `textemotion.py`'s `tf.tensordot` approach.
-- **Phase 8 evolution**: `K.tanh` → `keras.ops.tanh`, `K.dot` → `ops.matmul`, `K.softmax` → `ops.softmax`, `K.sum` → `ops.sum`. The Keras 2 backend ops (`K.*`) were deprecated in Keras 3.
+- **Phase 9 evolution**: `K.tanh` → `keras.ops.tanh`, `K.dot` → `ops.matmul`, `K.softmax` → `ops.softmax`, `K.sum` → `ops.sum`. The Keras 2 backend ops (`K.*`) were deprecated in Keras 3.
 
 #### New: Batch Inference (Lines 99-103)
 ```python
@@ -162,13 +162,13 @@ predictions = model.predict(padded_batch, verbose=0)
 nltk.download('punkt', quiet=True)
 ```
 - Fires on every server boot. If NLTK's CDN is down or the server has no internet, this either blocks startup or silently fails (leaving `sent_tokenize` broken).
-- Phase 8 fix: `setup_nltk.py` downloads during build/setup, not at runtime.
+- Phase 9 fix: `setup_nltk.py` downloads during build/setup, not at runtime.
 
 ---
 
 ## Header 3: Micro-Decision Log
 
-| Decision | Phase 6 | Phase 7 | Phase 8 |
+| Decision | Phase 6 | Phase 7 | Phase 9 |
 |---|---|---|---|
 | Face detector | Haar Cascade | MediaPipe `mp.solutions` (0.6) | MediaPipe Tasks API (0.75) |
 | Face resolution | 48×48 | 112×112 + CLAHE | 112×112 + CLAHE |
@@ -203,7 +203,7 @@ nltk.download('punkt', quiet=True)
 9. Text batch inference introduced
 10. Proper `finally` cleanup for temp files
 
-### What Phase 7 did NOT fix (left to Phase 8)
+### What Phase 7 did NOT fix (left to Phase 9)
 1. **`asyncio.to_thread()`**: All `model.predict()` calls still block the event loop.
 2. **`@tf.function` compilation**: No graph compilation, still eager execution.
 3. **Video FPS-aware decimation**: Still `frame_id % 10`.

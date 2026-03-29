@@ -8,6 +8,8 @@
 |---|---|---|
 | `FYP old/emotion_api/main.py` | 7,322 | Unified FastAPI: face + voice endpoints |
 | `FYP old/old endpoints.txt` | ~4,209 | Variant unified API with different model refs |
+| `FYP old/old video.txt` | ~4,209 | Variant image API with PyInstaller CPU-only binding |
+| `FYP old/myappworking.py` | 8,432 | Variant monolith with PyInstaller prep (`sys._MEIPASS`) |
 | `FYP old/emotion_api.spec` | 930 | PyInstaller bundling specification |
 | `FYP old/emotion_api/face_emotion_model.h5` | 7,475,760 | Phase 1 CNN (48×48) model weights |
 | `FYP old/emotion_api/final_lstm_model_tf212.h5` | 1,756,512 | Voice LSTM TF2.12 compatible |
@@ -263,17 +265,17 @@ if __name__ == "__main__":
 
 #### Block 1: Dual Model Loading (Lines 15-25)
 - **Both models load at startup into the same process**: `face_model` (~7.5MB) and `voice_model` (~1.7MB) share memory. If either crashes or leaks, both are affected.
-- **`warnings.filterwarnings("ignore")`**: Suppresses ALL warnings globally. This hides TensorFlow deprecation warnings but also hides legitimate warnings like numerical instability or shape mismatches. Phase 8 replaces this with targeted `os.environ` variables.
+- **`warnings.filterwarnings("ignore")`**: Suppresses ALL warnings globally. This hides TensorFlow deprecation warnings but also hides legitimate warnings like numerical instability or shape mismatches. Phase 9 replaces this with targeted `os.environ` variables.
 
 #### Block 2: Voice Label Merge Function (Lines 31-46)
 - **8-class voice labels with explicit calm→neutral merge**: `voice_labels_raw` has 8 entries (indices 0-7), including both `calm` (index 4) and `neutral` (index 5). The `merged_voice_label()` function maps index 4 to "neutral" at prediction time. This is different from Phase 2's training-time merge (where calm and neutral share the same training label).
 - **Critical flaw**: The voice model `final_lstm_model_tf212.h5` may have been trained with 8 output classes (including separate calm), or 7 (with calm merged). If trained with 7 classes, the `voice_labels_raw` dict with 8 entries would cause an index-out-of-bounds error for index 7. The fact that this script ran suggests the model had 8 output nodes.
-- **Phase 8 resolution**: The Kaggle retrained model uses exactly 7 output classes (`INT_TO_EMOTION` with indices 0-6), with calm merged during training, not at inference time.
+- **Phase 9 resolution**: The Kaggle retrained model uses exactly 7 output classes (`INT_TO_EMOTION` with indices 0-6), with calm merged during training, not at inference time.
 
 #### Block 3: Voice Feature Extraction with Delta Stacking (Lines 82-97)
 - **`mfcc + delta + delta2` stacking**: This is the ONLY place in the entire codebase where MFCC deltas (first and second order) are used. The stacked tensor has shape `(120, 174)` → reshaped to `(1, 174, 120)`.
 - **`librosa.feature.delta(mfcc)`**: Computes the temporal rate of change of each MFCC coefficient. Delta2 is the rate of change of the rate of change (acceleration). These capture how the voice changes over time.
-- **Phase 8 resolution**: Delta features were abandoned. The Phase 8 audio model uses MFCC-only features `(40, 174)` because the Bidirectional LSTM architecture captures temporal dynamics internally, making explicit delta computation redundant. This also halves the feature dimensionality, speeding up inference.
+- **Phase 9 resolution**: Delta features were abandoned. The Phase 9 audio model uses MFCC-only features `(40, 174)` because the Bidirectional LSTM architecture captures temporal dynamics internally, making explicit delta computation redundant. This also halves the feature dimensionality, speeding up inference.
 
 #### Block 4: Voice Sample Rate Bug (Line 215)
 - **`librosa.load(audio_stream, sr=22050)`**: Forces the audio to 22050 Hz. But the voice model (`final_lstm_model_tf212.h5` and its successor `audio_best_model.keras`) was trained on 16000 Hz audio. This sample rate mismatch means the MFCC extraction produces features at the wrong time resolution — the model sees frequency patterns it was never trained on. This causes unpredictable misclassification.
@@ -284,16 +286,32 @@ if __name__ == "__main__":
 - **CPU waste**: Even though skipped frames aren't processed, `cap.read()` still decodes every frame. The CPU decompresses all frames, then throws away 90% of them.
 - **`max(faces, key=lambda f: f[2] * f[3])`**: Selects the largest detected face by area (width × height). This is a reasonable heuristic — the largest face is likely the primary subject.
 - **Per-frame `predict_face_emotion()`**: Each processed frame triggers a separate `model.predict()` call. No batch accumulation.
-- **Phase 8 resolution**: `main_video.py` uses `frame_mod = max(1, int(fps))` for FPS-aware decimation (exactly 1 frame/second), accumulates face tensors into a list, then batch-predicts with `compute_vision_inference(np.stack(face_tensors))`.
+- **Phase 9 resolution**: `main_video.py` uses `frame_mod = max(1, int(fps))` for FPS-aware decimation (exactly 1 frame/second), accumulates face tensors into a list, then batch-predicts with `compute_vision_inference(np.stack(face_tensors))`.
 
 #### Block 6: Probability Scaling (Lines 70, 106)
 - **Face: `raw * 0.55`**: Reduces all face probabilities by 45%.
 - **Voice: `raw * 0.66`**: Reduces all voice probabilities by 34%.
 - **Different scaling factors for different models**: No documented rationale. These were likely tuned empirically during demos to make confidence scores "feel right" to the developer.
-- **Phase 8 resolution**: All arbitrary scaling removed. Raw softmax probabilities are returned. Phase 8's text model applies `predictions ** 1.5` (power sharpening) which is mathematically principled — it increases the gap between the top and second predictions, making the model's "opinion" stronger.
+- **Phase 9 resolution**: All arbitrary scaling removed. Raw softmax probabilities are returned. Phase 9's text model applies `predictions ** 1.5` (power sharpening) which is mathematically principled — it increases the gap between the top and second predictions, making the model's "opinion" stronger.
 
-#### Block 7: PyInstaller Spec (`emotion_api.spec`)
+#### Block 7: PyInstaller Spec (`emotion_api.spec`) & Variant Monoliths (`myappworking.py` / `old video.txt`)
 
+In `myappworking.py` and `old video.txt`, we see explicit runtime code supporting the `.spec` file:
+
+```python
+if getattr(sys, 'frozen', False):
+    import pyi_splash
+    pyi_splash.close()
+    application_path = sys._MEIPASS
+else:
+    application_path = os.path.dirname(os.path.abspath(__file__))
+
+cascade_path = os.path.join(application_path, "haarcascade_frontalface_default.xml")
+```
+
+- **`sys._MEIPASS`**: This is PyInstaller's temporary unpacking directory. When a user runs the `.exe`, PyInstaller extracts `haarcascade_frontalface_default.xml` and the `.h5` files here. These scripts were modified to load assets from this dynamic path instead of the current working directory.
+- **CPU Binding**: `old video.txt` explicitly used `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` and `os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"` to force CPU execution, likely because bundling CUDA native libraries via PyInstaller was failing.
+- **`emotion_api.spec`**: 
 ```python
 a = Analysis(
     ['main.py'],
@@ -332,7 +350,7 @@ exe = EXE(
 
 ## Header 3: Micro-Decision Log
 
-| Decision | Phase 6 Value | Phase 8 Value | Rationale |
+| Decision | Phase 6 Value | Phase 9 Value | Rationale |
 |---|---|---|---|
 | Architecture | Single monolithic FastAPI | 4 separate microservices | Isolation, independent scaling, fault containment |
 | Face model | `face_emotion_model.h5` (48×48, 57%) | `fer_best_model.keras` (112×112, 81%) | Retrained on FERPlus with CLAHE, augmentation |
@@ -351,7 +369,7 @@ exe = EXE(
 
 ## Header 4: Inter-Phase Diff Analysis
 
-| Phase 6 Artifact | Immediate Descendant (Phase 7) | Phase 8 Descendant |
+| Phase 6 Artifact | Immediate Descendant (Phase 7) | Phase 9 Descendant |
 |---|---|---|
 | `emotion_api/main.py` `/predict/image` | `2nd attempt Video.txt` `/predict/image` | `main_video.py` `/predict/image` |
 | `emotion_api/main.py` `/predict/video` | `2nd attempt Video.txt` `/predict/video` | `main_video.py` `/predict/video` |

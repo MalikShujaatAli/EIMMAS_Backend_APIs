@@ -1,12 +1,12 @@
 # 99: Cross-Reference Validation Matrix
 
-This document traces the complete lineage of every function, class, configuration constant, and architectural pattern across all 8 phases, identifying births, mutations, deaths, and resurrections.
+This document traces the complete lineage of every function, class, configuration constant, and architectural pattern across all 9 phases, identifying births, mutations, deaths, and resurrections.
 
 ---
 
 ## 1. Function/Class Lineage Table
 
-| Entity | Born | Mutated | Died | Resurrected | Final Form (Phase 8) |
+| Entity | Born | Mutated | Died | Resurrected | Final Form (Phase 9) |
 |---|---|---|---|---|---|
 | `preprocess_face()` | P3 (`3.py`) | P6 (axis shorthand), P7 (CLAHE+112×112+CUBIC) | — | — | `main_video.py:preprocess_face()` |
 | `predict_face_emotion()` | P3 (`3.py`) | P6 (×0.55 scaling), P7 (scaling removed) | — | — | Inlined into batch prediction loop |
@@ -16,35 +16,37 @@ This document traces the complete lineage of every function, class, configuratio
 | `heartbeat_bar()` | P3 (`v5.py`) | P3/`v6.py` (identical) | P6 (no terminal UI in API) | Never | — |
 | `merged_voice_label()` | P6 (`emotion_api/main.py`) | — | P7 (7-class model, merge at training time) | Never | — |
 | `AttentionLayer` | P4 (`textemotion.py`) | P4/`textemotion_tf212.py` (identical copy), P7 (`K.tanh`/`K.dot`, shape change) | — | — | `main_text.py` (`ops.tanh`/`ops.matmul`, Keras 3) |
-| `is_context_clear()` | P4 (`textemotion_tf212.py`) | — | P7 (removed entirely) | Never | — |
+| `is_context_clear()` | P4 (`textemotion_tf212.py`) | — | P4 (`BiLSTM app.py`, replaced by `sentence_has_emotion`) | Never | — |
 | `rewrite_sentence()` | P4 (`textemotion_tf212.py`) | — | P7 (removed entirely) | Never | — |
 | `NEGATION_MAP` | P4 (`textemotion_tf212.py`) | — | P7 (removed entirely) | Never | — |
+| `sentence_has_emotion()` | P4 (`BiLSTM app.py`) | — | P7 (removed entirely) | Never | — |
+| `rawemotionwords` list | P4 (`BiLSTM app.py`) | — | P7 (removed entirely) | Never | — |
 | `predict_emotion()` (text) | P4 (`textemotion_tf212.py`) | P4/`textcalemo.py` (CNN version) | — | — | `compute_inference()` `@tf.function` |
-| `predict()` (text simple) | P4 (`textemotion.py`) | — | P4/`textemotion_tf212.py` (expanded version) | — | — |
+| `predict()` (text simple) | P4 (`textemotion.py`) | P4 (`BiLSTM 1.py`, batch support) | P4/`textemotion_tf212.py` (expanded version) | — | — |
 | `extract_largest_face()` | P7 (`2nd attempt Video.txt`) | — | — | — | Inlined with MediaPipe Tasks API |
 | `compute_vision_inference()` | P8 (`main_video.py`) | — | — | — | Current (born in P8) |
 | `compute_inference()` (text) | P8 (`main_text.py`) | — | — | — | Current (born in P8) |
-| `fuse_emotions()` | P8 (`orchestrator_v3.py`) | — | — | — | Current (born in P8) |
-| `_extract_audio_from_video()` | P8 (`orchestrator_v3.py`) | — | — | — | Current (born in P8) |
+| `fuse_emotions()` | P9 (`orchestrator_v3.py`) | — | — | — | Current (born in P9) |
+| `_extract_audio_from_video()` | P9 (`orchestrator_v3.py`) | — | — | — | Current (born in P9) |
 
 ---
 
 ## 2. Configuration Constant Lineage
 
-| Constant | P2 | P3 | P4 | P6 | P7 | P8 |
-|---|---|---|---|---|---|---|
-| Audio sample rate | 22050 (librosa default) | 16000 (Vosk) | — | 22050 (BUG) | 16000 (fixed) | 16000 |
-| MFCC bands (`N_MFCC`) | 40 | 40 | — | 40 | 40 | 40 |
-| MFCC pad length (`MAX_PAD_LEN`) | 174 | 174 | — | 174 | 174 | 174 |
-| Face input size | 48×48 | 48×48 | — | 48×48 | 112×112 | 112×112 |
-| Face detection method | — | Haar | — | Haar | MediaPipe 0.6 | MediaPipe 0.75 |
-| Face prob scaling | — | ×0.55 | — | ×0.55 (face), ×0.66 (voice) | None | None |
-| Text `max_len` | — | — | 50/100/60 | — | 100 | 100 |
-| Text `max_words` | — | — | 20,000 | — | Unknown | 30,000 |
-| Text confidence threshold | — | — | — | — | 0.40 | 0.50 + 0.15 gap |
-| Audio file size limit | — | — | — | None | 10 MB | 50 MB |
-| Video file size limit | — | — | — | None | None | 250 MB |
-| CORS | — | — | — | None | Audio only | All services |
+| Constant | P2 | P3 | P4 | P6 | P7 | P8 | P9 |
+|---|---|---|---|---|---|---|---|
+| Audio sample rate | 22050 (librosa default) | 16000 (Vosk) | — | 22050 (BUG) | 16000 (fixed) | 16000 | 16000 |
+| MFCC bands (`N_MFCC`) | 40 | 40 | — | 40 | 40 | 40 | 40 |
+| MFCC pad length (`MAX_PAD_LEN`) | 174 | 174 | — | 174 | 174 | 174 | 174 |
+| Face input size | 48×48 | 48×48 | — | 48×48 | 112×112 | 112×112 | 112×112 |
+| Face detection method | — | Haar | — | Haar | MediaPipe 0.6 | MediaPipe 0.75 | MediaPipe 0.75 |
+| Face prob scaling | — | ×0.55 | — | ×0.55 (face), ×0.66 (voice) | None | None | None |
+| Text `max_len` | — | — | 50/100/60 | — | 100 | 100 | 100 |
+| Text `max_words` | — | — | 20,000 | — | Unknown | 30,000 | 30,000 |
+| Text confidence threshold | — | — | — | — | 0.40 | 0.50 + 0.15 gap | 0.50 + 0.15 gap |
+| Audio file size limit | — | — | — | None | 10 MB | 50 MB | 50 MB |
+| Video file size limit | — | — | — | None | None | 250 MB | 250 MB |
+| CORS | — | — | — | None | Audio only | All services | All services |
 
 ---
 
@@ -53,9 +55,9 @@ This document traces the complete lineage of every function, class, configuratio
 | Pattern | Born | Died | Replacement |
 |---|---|---|---|
 | Hardware-locked desktop app | P3 (`sounddevice`, `keyboard`, `cv2.VideoCapture(0)`) | P6 (FastAPI transition) | HTTP `UploadFile` |
-| Monolithic multi-model process | P6 (`emotion_api/main.py`) | P7 (service separation) | 4 independent microservices |
-| PyInstaller `.exe` bundling | P6 (`emotion_api.spec`) | P6 (abandoned) | `start_servers.bat` multi-worker |
-| Haar Cascade face detection | P3 (`3.py`) | P7 (MediaPipe) | MediaPipe Tasks Vision API |
+| Monolithic multi-model process | P6 (`emotion_api/main.py`, `myappworking.py`) | P7 (service separation) | 4 independent microservices |
+| PyInstaller `.exe` bundling | P6 (`emotion_api.spec`, `myappworking.py`, `old video.txt`) | P6 (abandoned) | `start_servers.bat` multi-worker |
+| Haar Cascade face detection | P3 (`3.py`, `realtimedetection.py`) | P7 (MediaPipe) | MediaPipe Tasks Vision API |
 | `pd.get_dummies()` one-hot labels | P2 (`v4.py`) | P2 (training only) | `INT_TO_EMOTION` dict + sparse categorical |
 | MFCC delta/delta2 stacking | P6 (`emotion_api/main.py`) | P7 (MFCC only) | MFCC only (BiLSTM captures dynamics) |
 | Manual negation dictionary | P4 (`textemotion_tf212.py`) | P7 (removed) | Model handles negation natively |
@@ -64,7 +66,7 @@ This document traces the complete lineage of every function, class, configuratio
 | `model.predict()` eager execution | P3 (all scripts) | P8 | `@tf.function` compiled graph |
 | Per-item prediction loops | P3-P7 (video frames, text sentences) | P8 | Batch tensor stacking |
 | Disk-based audio processing | P6 (`NamedTemporaryFile`) | P8 | `soundfile.read(BytesIO())` + FFmpeg RAM pipes |
-| `nltk.download()` at runtime | P7 (`2nd attempt Text.txt`) | P8 | `setup_nltk.py` offline pre-download |
+| `nltk.download()` at runtime | P7 (`2nd attempt Text.txt`) | P9 | `setup_nltk.py` offline pre-download |
 | Arbitrary probability scaling (×0.55, ×0.66) | P3 (`3.py`), P6 (`emotion_api/main.py`) | P8 | Raw softmax + power sharpening (×1.5) |
 
 ---
@@ -85,6 +87,7 @@ This document traces the complete lineage of every function, class, configuratio
 | `time` import | P3 (`v5.py`) | Imported but never called. Likely intended for timing measurements. |
 | `representative_dataset()` | P5 (`7.py`) | TFLite calibration generator defined but never called. |
 | `model_func()` | P5 (`7.py`) | Invalid `@tf.function` wrapping of `interpreter.invoke()`. Never executed. |
+| `cv2.putText` emotion overlay | P3 (`realtimedetection.py`) | Direct window overlay abandoned when moving to headless APIs. |
 
 ---
 
@@ -111,11 +114,11 @@ This document traces the complete lineage of every function, class, configuratio
 
 ## 6. Port Assignment Lineage
 
-| Service | P6 | P7 Audio | P7 Video | P7 Text | P8 |
-|---|---|---|---|---|---|
-| Unified/Audio | 8000 | 8002 | — | — | 8000 |
-| Video | — | — | 8002 | — | 8002 |
-| Text | — | — | — | 8001 | 8001 |
-| Orchestrator | — | — | — | — | 8003 |
+| Service | P6 | P7 Audio | P7 Video | P7 Text | P8 | P9 |
+|---|---|---|---|---|---|---|
+| Unified/Audio | 8000 | 8002 | — | — | 8000 | 8000 |
+| Video | — | — | 8002 | — | 8002 | 8002 |
+| Text | — | — | — | 8001 | 8001 | 8001 |
+| Orchestrator | — | — | — | — | — | 8003 |
 
-Note: In Phase 7, both Audio and Video used port 8002 (they were never meant to run simultaneously — they were separate experiments). Phase 8 resolved this by giving Audio port 8000 and Video port 8002.
+Note: In Phase 7, both Audio and Video used port 8002 (they were never meant to run simultaneously — they were separate experiments). Phase 9 resolved this by giving Audio port 8000 and Video port 8002.

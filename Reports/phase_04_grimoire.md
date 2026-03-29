@@ -10,6 +10,8 @@
 | `FYP old/textcalemo.py` | 968 | CNN-based text emotion predictor |
 | `FYP old/textemotion.py` | 2,971 | AttentionLayer text tester with glob discovery |
 | `FYP old/textemotion_tf212.py` | 5,324 | Advanced text predictor with negation engine |
+| `FYP old/BiLSTM 1.py` | 3,845 | Text predictor with AttentionLayer (K.tanh/K.dot) |
+| `FYP old/BiLSTM app.py` | 6,211 | First text emotion FastAPI endpoint |
 | `FYP old/emotion_api/testtext.py` | 5,324 | Byte-identical copy of `textemotion_tf212.py` |
 
 ---
@@ -103,18 +105,18 @@ print("✅ Model, tokenizer, and label encoder saved to current directory.")
 ```
 
 #### Block 1: Dataset Loading (Lines 14-22)
-- **`archive_8/archive/combined_emotion.csv`**: A local CSV with `sentence` and `emotion` columns. The exact dataset composition is not documented, but based on the Phase 8 Kaggle notebook, it is a merged dataset of Kaggle emotion text datasets.
+- **`archive_8/archive/combined_emotion.csv`**: A local CSV with `sentence` and `emotion` columns. The exact dataset composition is not documented, but based on the Phase 9 Kaggle notebook, it is a merged dataset of Kaggle emotion text datasets.
 - **`df.drop_duplicates()`**: Removes exact duplicate rows. Does NOT check for near-duplicates or contradictory labels.
 - **Visualization**: `sns.countplot` generates a bar chart of emotion distribution. This is a diagnostic step — the output is visual-only, not stored programmatically.
-- **Missing**: No handling of the `'suprise'` typo that appears in the training data. The Phase 8 Kaggle notebook adds `df[LABEL_COLUMN].replace('suprise', 'surprise', inplace=True)`.
+- **Missing**: No handling of the `'suprise'` typo that appears in the training data. The Phase 9 Kaggle notebook adds `df[LABEL_COLUMN].replace('suprise', 'surprise', inplace=True)`.
 
 #### Block 2: Label Encoding (Lines 25-27)
 - **`LabelEncoder()`**: Sklearn's `LabelEncoder` maps string labels to integers alphabetically. The exact class-to-integer mapping depends on the unique labels in the dataset.
 - **Fragile coupling**: The label encoder is pickled to `label_encoder1.pkl`. Any script loading this file MUST use the same label encoder instance to decode predictions. If the training data changes (different unique labels or different order), the mapping silently breaks.
 
 #### Block 3: Tokenization (Lines 35-45)
-- **`max_words = 20000`**: Vocabulary size cap. Words outside the top 20,000 are replaced by the `<OOV>` (Out Of Vocabulary) token. The Phase 8 Kaggle notebook increases this to `MAX_VOCAB_SIZE = 30000`.
-- **`max_len = 50`**: Maximum sequence length. Sentences longer than 50 tokens are truncated. The Phase 8 production model uses `MAX_LEN = 100`.
+- **`max_words = 20000`**: Vocabulary size cap. Words outside the top 20,000 are replaced by the `<OOV>` (Out Of Vocabulary) token. The Phase 9 Kaggle notebook increases this to `MAX_VOCAB_SIZE = 30000`.
+- **`max_len = 50`**: Maximum sequence length. Sentences longer than 50 tokens are truncated. The Phase 9 production model uses `MAX_LEN = 100`.
 - **`padding='post'`**: Zero-padding is added after the text, not before. This convention is preserved through all phases.
 
 #### Block 4: BiLSTM Architecture (Lines 52-59)
@@ -123,7 +125,7 @@ print("✅ Model, tokenizer, and label encoder saved to current directory.")
 - **`Embedding(input_dim=max_words, output_dim=128)`**: Learns 128-dimensional word vectors from scratch. No pretrained embeddings (GloVe, Word2Vec) are used.
 
 #### Block 5: Training (Lines 65-70)
-- **`epochs=5`**: Absurdly low. 5 epochs is insufficient for convergence on text classification tasks. The Phase 8 Kaggle notebook trains for up to 15 epochs with early stopping.
+- **`epochs=5`**: Absurdly low. 5 epochs is insufficient for convergence on text classification tasks. The Phase 9 Kaggle notebook trains for up to 15 epochs with early stopping.
 - **`batch_size=256`**: Large batch size. Efficient but may harm generalization on small datasets.
 - **`validation_split=0.2`**: Uses 20% of training data for validation, but this split is random (not stratified). The `train_test_split` above already stratified the holdout test set, but the validation split within training is not stratified.
 
@@ -278,7 +280,7 @@ while True:
 #### Critical Artifacts
 
 - **First `AttentionLayer` appearance**: This is where the custom attention mechanism was born. The implementation uses `tf.tensordot` to compute attention scores, `tf.nn.softmax` for normalization, and `tf.reduce_sum` for weighted pooling. The weight shape is `(dim,)` — a 1D vector, making this a simplified "additive attention" variant.
-- **`AttentionLayer` evolution**: In `textemotion.py`, the weight shape is `(dim,)` with `glorot_uniform` initializer. In `2nd attempt Text.txt`, it becomes `(input_shape[-1], 1)` with `normal` initializer, and the computation changes to `K.tanh(K.dot(x, self.W) + self.b)` — a more standard Bahdanau-style attention. In Phase 8's `main_text.py`, the ops change to `keras.ops.tanh`/`ops.matmul`/`ops.softmax`/`ops.sum` for Keras 3 compatibility.
+- **`AttentionLayer` evolution**: In `textemotion.py`, the weight shape is `(dim,)` with `glorot_uniform` initializer. In `2nd attempt Text.txt`, it becomes `(input_shape[-1], 1)` with `normal` initializer, and the computation changes to `K.tanh(K.dot(x, self.W) + self.b)` — a more standard Bahdanau-style attention. In Phase 9's `main_text.py`, the ops change to `keras.ops.tanh`/`ops.matmul`/`ops.softmax`/`ops.sum` for Keras 3 compatibility.
 - **`glob.glob("trained_models/aa/...")`**: Dynamic model file discovery by sorting glob matches and taking the last (most recent) file. This was replaced by explicit path constants in all later phases.
 - **`PorterStemmer` — imported, never used**: `stemmer = PorterStemmer()` is defined on line 15 but `stemmer` is never called anywhere in the script. This is evidence of an abandoned NLP preprocessing step — the developer considered stemming words before tokenization but decided against it (likely because the tokenizer was trained on unstemmed text, so stemming at inference time would cause vocabulary mismatches).
 - **`maxlen=60`**: Different from `textemo.py`'s 50 and `textcalemo.py`'s 100. This is the third distinct `maxlen` value, indicating that model retraining happened multiple times with different configurations.
@@ -474,14 +476,14 @@ while True:
 - Rejects sentences ≤ 2 words: "I'm sad" (2 words) → **rejected**. "Help me" (2 words) → **rejected**.
 - Rejects sentences with >50% non-alphabetic characters: "I'm so angry!!!" → 4 exclamations + apostrophe = 5 non-alpha out of 16 chars → passes. But "😭😭😭" → 100% non-alpha → rejected (reasonable).
 - Requires presence of hardcoded emotion keywords OR negators: "The project deadline is tomorrow and I can barely breathe" → no keyword match → **rejected**, even though it clearly expresses anxiety.
-- **Phase 8 resolution**: `is_context_clear()` is completely removed. The retrained BiLSTM+Attention model handles ambiguous sentences by predicting with low confidence, which is caught by the dual-threshold filter (`confidence < 0.50` OR `gap < 0.15`).
+- **Phase 9 resolution**: `is_context_clear()` is completely removed. The retrained BiLSTM+Attention model handles ambiguous sentences by predicting with low confidence, which is caught by the dual-threshold filter (`confidence < 0.50` OR `gap < 0.15`).
 
 **`NEGATION_MAP` and `rewrite_sentence()` (Lines 73-114)**
 - 11 word-pair mappings. Total English negation patterns: infinite.
 - `"not happy"` → regex `r"not\s+happy"` → replaced with `"sad"`. This works for the exact phrase "not happy" but fails for: "not particularly happy", "not at all happy", "not feeling happy about this", "unhappy", "far from happy".
 - Adjacent patterns attempt to catch "not feeling X", "not really X", "not exactly X", and "I'm not X" / "I am not X". Each requires the target word to exist in `NEGATION_MAP`.
 - **Logical flaw**: If a sentence contains a negation of a word NOT in the map (e.g., "not peaceful"), the function returns the original sentence unchanged, sending "not peaceful" to the model — which may predict "joy" because it sees "peaceful".
-- **Phase 8 resolution**: `rewrite_sentence()` is completely removed. The BiLSTM+Attention model was retrained with a larger dataset that includes negated sentences, so it learns negation patterns implicitly.
+- **Phase 9 resolution**: `rewrite_sentence()` is completely removed. The BiLSTM+Attention model was retrained with a larger dataset that includes negated sentences, so it learns negation patterns implicitly.
 
 **`predict_emotion()` (Lines 120-131)**
 - Single sentence → single `model.predict()` call. When called inside the `for s in sentences` loop, this means N sentences = N `model.predict()` calls.
@@ -490,13 +492,29 @@ while True:
 **Paragraph Voting System (Lines 145-180)**
 - `vote_counter`: Counts how many sentences predict each emotion. The paragraph's final emotion is the mode (most frequent vote).
 - `prob_accumulator`: Sums raw probabilities across sentences, then averages them.
-- This dual voting+averaging approach survives conceptually into Phase 8's `main_text.py` (probability accumulation + final emotion selection).
+- This dual voting+averaging approach survives conceptually into Phase 9's `main_text.py` (probability accumulation + final emotion selection).
+
+---
+
+### File: `BiLSTM 1.py` & `BiLSTM app.py` (The API Bridge)
+
+These two scripts form the final evolution of Phase 4 before the unified APIs.
+
+**`BiLSTM 1.py`**:
+- **Role**: Desktop text predictor with the mature `AttentionLayer` (`K.tanh`/`K.dot` ops).
+- **Evolution**: Shows `AttentionLayer` migrating from `tf.tensordot` (in `textemotion.py`) to the Bahdanau-style `K.tanh(K.dot(x, W) + b)` used in Phase 7.
+- **Voting**: Uses Python's `collections.Counter` for majority voting, simpler than the manual dictionary in `textemotion_tf212.py`.
+
+**`BiLSTM app.py`**:
+- **Role**: The **first text emotion FastAPI endpoint** (Port 8001). The missing link between Phase 4 desktop scripts and Phase 7 distributed APIs.
+- **Key Innovation**: Replaces `is_context_clear()` with a massive `rawemotionwords` list (150+ keywords). The `sentence_has_emotion()` function requires at least one keyword match before running the model.
+- **Why abandoned**: Phase 9's dual-threshold confidence filter proved far superior to relying on hardcoded vocabulary arrays.
 
 ---
 
 ## Header 3: Micro-Decision Log
 
-| Decision | `textemo.py` | `textcalemo.py` | `textemotion.py` | `textemotion_tf212.py` | Phase 8 (`main_text.py`) |
+| Decision | `textemo.py` | `textcalemo.py` | `textemotion.py` | `textemotion_tf212.py` | Phase 9 (`main_text.py`) |
 |---|---|---|---|---|---|
 | Architecture | BiLSTM | CNN | BiLSTM+Attention | BiLSTM (model loaded) | BiLSTM+Attention |
 | `max_len` | 50 | 100 | 60 | 50 | 100 |
@@ -521,8 +539,8 @@ while True:
 | `textemotion.py` `AttentionLayer` | → `2nd attempt Text.txt` → `main_text.py` | Evolved from `tf.tensordot` → `K.tanh/K.dot` → `ops.tanh/ops.matmul` |
 | `textemotion.py` `PorterStemmer` | → Abandoned | Never used; removed silently |
 | `textemotion.py` `glob.glob()` discovery | → Replaced by explicit paths | All Phase 7+ scripts use hardcoded model paths |
-| `textemotion_tf212.py` `is_context_clear()` | → Removed entirely in Phase 8 | Replaced by dual-threshold confidence filter |
-| `textemotion_tf212.py` `NEGATION_MAP` | → Removed entirely in Phase 8 | Model handles negation natively |
-| `textemotion_tf212.py` `rewrite_sentence()` | → Removed entirely in Phase 8 | Model handles negation natively |
+| `textemotion_tf212.py` `is_context_clear()` | → Removed entirely in Phase 9 | Replaced by dual-threshold confidence filter |
+| `textemotion_tf212.py` `NEGATION_MAP` | → Removed entirely in Phase 9 | Model handles negation natively |
+| `textemotion_tf212.py` `rewrite_sentence()` | → Removed entirely in Phase 9 | Model handles negation natively |
 | `textemotion_tf212.py` vote counter | → `main_text.py` accumulator logic | Preserved conceptually |
 | `emotion_api/testtext.py` | → Byte-identical copy; co-located for Phase 6 monolith | Replaced by `main_text.py` endpoint |

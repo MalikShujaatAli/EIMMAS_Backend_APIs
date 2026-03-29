@@ -1,10 +1,20 @@
-# Phase 8 Thesis: Modern Production Microservices (Current)
+# Phase 8 Thesis: The Pre-Production API Bridge
 
-## Strategic Intent
-Phase 8 was not an incremental upgrade — it was a complete re-architecture driven by a systematic audit of every remaining deficiency (documented in `problems to fix.txt`). The goal was to achieve a production-grade system that could handle concurrent mobile users without freezing, crashing, or leaking resources. Eight architectural loopholes were identified and methodically closed: event loop blocking, eager execution overhead, disk I/O bottlenecks, MFCC volume bias, video CPU saturation, NLTK cold-boot failures, database N+1 queries, and missing security controls.
+## Core Objective
+The primary aim of Phase 8 was to refactor the separated, flawed APIs of Phase 7 into stable, deployable microservices before introducing the complexities of a central orchestrator. The goal was to eliminate catastrophic latency bottlenecks (specifically in video processing) and remove hard disk I/O dependency for media files.
 
-## Scope & Boundaries
-Phase 8 produced four microservices (`main_audio.py`, `main_video.py`, `main_text.py`, `orchestrator_v3.py`), a shared database module (`database.py`), a TFLite converter (`convert_audio_model.py`), an NLTK setup script (`setup_nltk.py`), and a multi-service Windows launcher (`start_servers.bat`). The orchestrator added capabilities that did not exist in any previous phase: Groq Llama-3.3-70B LLM integration with a therapeutic personality prompt, JWT HS256 authentication with email-based user isolation, async SQLite chat persistence, FFmpeg RAM-pipe audio extraction from video, weighted multimodal emotion fusion, a contradiction engine for affective masking detection, and pre-flight regex gates for crisis and abuse patterns.
+## Architectural State
+- **Decoupled Pre-Production**: Three independent FastAPI applications (`main_audio.py`, `main_video.py`, `main_text.py` from `FYP old/`) running on separate ports (8000, 8002, 8001).
+- **No Orchestration**: External clients (or testing scripts) had to communicate with each API directly. No centralized fusion, authentication, or LLM chat existed.
+- **In-Memory Transformation**: Audio processing successfully shifted from `NamedTemporaryFile` disk writes to `io.BytesIO` streams, marking the first time the system achieved "zero-disk" operation for a modality.
 
-## Success Analysis
-Phase 8 resolved every identified flaw: `asyncio.to_thread()` eliminated event loop blocking. `@tf.function(reduce_retracing=True)` with warmup eliminated eager execution overhead. `soundfile.read()` from byte buffers and FFmpeg `pipe:0`/`pipe:1` eliminated disk I/O. Z-score MFCC normalization eliminated the "False Angry" bias. FPS-aware frame decimation with batch tensor stacking eliminated video CPU saturation. `setup_nltk.py` eliminated cold-boot failures. Bulk `delete().where()` eliminated N+1 database queries. JWT validation and regex pre-flight gates established security boundaries. The system is architecturally ready for production deployment behind a reverse proxy with horizontal scaling via Docker/Kubernetes.
+## Pivotal Technical Inventions
+1. **Dual-Threshold Filter (Text)**: Transitioned from hardcoded emotion keyword matching to a dynamic confidence filter (`max_prob < 0.50` OR `max_prob - second_prob < 0.15`). This allowed the model's native intelligence to handle nuance rather than relying on brittle dictionaries.
+2. **Keras 3 Math Ops**: Migrated the `AttentionLayer` from deprecated `tf.keras.backend` methods to backend-agnostic `keras.ops`.
+3. **Tasks Vision API**: Upgraded facial detection from legacy `mp.solutions` to the MediaPipe Tasks Vision API (`vision.FaceDetector`), increasing the confidence threshold to 0.75 to ruthlessly eliminate false positives.
+
+## Why The Phase Ended
+While the individual microservices were technically functional, they were structurally incomplete for a final product. The video service still lacked batched processing (analyzing frame-by-frame instead of as a tensor stack), and none of the APIs utilized asynchronous thread offloading (`asyncio.to_thread`), meaning heavy ML inference could still block the FastAPI event loop under concurrent load. Furthermore, a multimodal system inherently requires a fusion layer to combine the signals into a unified psychological profile—necessitating the creation of Phase 9's master orchestrator.
+
+## Legacy Impact
+Phase 8 represents the "dress rehearsal" for production. The specific file forms created here (`main_audio.py`, `main_video.py`, `main_text.py`) survived almost intact into the final `services/` directory, requiring only the final performance optimizations (`@tf.function` and thread pooling) to achieve enterprise-grade stability.
