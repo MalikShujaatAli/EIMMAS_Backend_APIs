@@ -3,10 +3,19 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import Column, String, DateTime, ForeignKey, Text
+from sqlalchemy.pool import NullPool
 
 # 1. Setup SQLite Async Engine
 DATABASE_URL = "sqlite+aiosqlite:///./therapy_chats.db"
-engine = create_async_engine(DATABASE_URL, echo=False)
+
+# NullPool prevents async connection queue deadlocks with SQLite.
+# The 15s timeout ensures any stuck query raises an error instead of freezing the server forever.
+engine = create_async_engine(
+    DATABASE_URL, 
+    echo=False,
+    poolclass=NullPool,
+    connect_args={"timeout": 15.0}
+)
 SessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 

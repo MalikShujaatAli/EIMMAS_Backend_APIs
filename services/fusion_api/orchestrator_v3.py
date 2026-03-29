@@ -9,7 +9,7 @@ import tempfile
 import uuid
 import jwt
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -461,7 +461,6 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
 
 @app.post("/analyze")
 async def analyze_multimodal(
-    background_tasks: BackgroundTasks,
     session_id: str = Form(None), 
     text: str = Form(None),
     audio: UploadFile = File(None),
@@ -473,7 +472,7 @@ async def analyze_multimodal(
     start_time = time.time()
     logger.info(f"========== NEW REQUEST FROM: {user_email} ==========")
     
-    # ✅ SECURITY: Prevent 2GB maliciously large files from OOM-crashing the Orchestrator RAM
+    # SECURITY: Prevent 2GB maliciously large files from OOM-crashing the Orchestrator RAM
     MAX_FILE_SIZE = 250 * 1024 * 1024 # 250MB Hard Limit
     if audio and audio.size and audio.size > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="Audio file exceeds 250MB limit.")
@@ -512,7 +511,7 @@ async def analyze_multimodal(
             text = None # Treat as empty if it's just background noise
 
     # ---------------------------------------------------------
-    # 🚨 PRE-FLIGHT SAFETY GATE (CIRCUIT BREAKER)
+    # PRE-FLIGHT SAFETY GATE (CIRCUIT BREAKER)
     # ---------------------------------------------------------
     is_critical_override = False
     fused_emotion = "neutral"
@@ -522,7 +521,7 @@ async def analyze_multimodal(
         text_lower = text.lower()
         # Check for abuse or crisis using Semantic Patterns
         if any(re.search(pat, text_lower) for pat in CRISIS_PATTERNS + ABUSIVE_PATTERNS):
-            logger.warning("🚨 SAFETY BLOCKADE TRIGGERED: Bypassing ML Models.")
+            logger.warning("SAFETY BLOCKADE TRIGGERED: Bypassing ML Models.")
             is_critical_override = True
             fused_emotion = "high_alert"
             raw_api_data = {"system": "Blocked by Safety Pre-Flight."}
@@ -550,7 +549,7 @@ async def analyze_multimodal(
 
         # 4. Fusion
         raw_api_data = {res["source"]: res["data"] for res in api_results if res["data"] is not None}
-        # 🚨 THE GHOST GATE
+        # THE GHOST GATE
         # If there is no text AND all ML models failed to find a face/voice:
         if not text and len(raw_api_data) == 0:
             logger.error("Ghost Request: No text, no face, no voice.")
@@ -574,16 +573,14 @@ async def analyze_multimodal(
     user_msg = ChatMessage(message_id=str(uuid.uuid4()), session_id=session_id, role="user", content=text or "[Media]", detected_emotion=fused_emotion)
     ai_msg = ChatMessage(message_id=str(uuid.uuid4()), session_id=session_id, role="psychologist", content=llm_response)
     
-    # ✅ LIGHTNING SPEED: Non-blocking background DB commit!
-    # By creating a fresh thread session, we instantly send the HTTP JSON back to the user's phone, 
-    # and silently save the data to SQLite out of the critical path!
-    async def bg_save_logs(u_msg, a_msg):
-        async with SessionLocal() as bg_db:
-            bg_db.add(u_msg)
-            bg_db.add(a_msg)
-            await bg_db.commit()
-            
-    background_tasks.add_task(bg_save_logs, user_msg, ai_msg)
+    # DEADLOCK FIX: Save sequentially using the active request's DB session.
+    # SQLite writes take ~2ms. The background task was causing a write-lock race
+    # condition with Flutter's immediate GET /sessions call, permanently freezing
+    # the Uvicorn worker. Sequential commit guarantees the lock is released
+    # BEFORE the HTTP response reaches Flutter.
+    db.add(user_msg)
+    db.add(ai_msg)
+    await db.commit()
 
     latency = round(time.time() - start_time, 2)
     logger.info(f"========== FUSION COMPLETE: {fused_emotion.upper()} ({latency}s) ==========\n")
@@ -594,7 +591,7 @@ async def analyze_multimodal(
         "session_id": session_id,
         "fusion_result": {
             "final_fused_emotion": fused_emotion, 
-            "show_emotion_ui": show_emotion,      # ⬅️ NEW: Flutter checks this to show/hide the UI!
+            "show_emotion_ui": show_emotion,      # Flutter checks this to show/hide the UI!
             "transcribed_text_used": text, 
             "psychologist_response": llm_response,
         },
@@ -606,7 +603,7 @@ async def get_user_sessions(user_email: str = Depends(get_current_user), db: Asy
     stmt = select(ChatSession).where(ChatSession.user_email == user_email).order_by(ChatSession.created_at.desc())
     result = await db.execute(stmt)
     sessions = result.scalars().all()
-    # ✅ FIX: Force ISO formatting with 'Z' (UTC indicator) so Flutter knows exactly what timezone this is
+    # FIX: Force ISO formatting with 'Z' (UTC indicator) so Flutter knows exactly what timezone this is
     return [{"session_id": s.session_id, "title": s.title, "created_at": s.created_at.isoformat() + "Z"} for s in sessions]
 
 @app.get("/sessions/{session_id}/messages")
@@ -614,10 +611,10 @@ async def get_session_messages(session_id: str, db: AsyncSession = Depends(get_d
     stmt = select(ChatMessage).where(ChatMessage.session_id == session_id).order_by(ChatMessage.timestamp.asc())
     result = await db.execute(stmt)
     messages = result.scalars().all()
-    # ✅ FIX: Force ISO formatting
+    # FIX: Force ISO formatting
     return [{"role": m.role, "content": m.content, "emotion": m.detected_emotion, "timestamp": m.timestamp.isoformat() + "Z"} for m in messages]
 
-# ✅ NEW: Delete Session Endpoint
+# Delete Session Endpoint
 @app.delete("/sessions/{session_id}")
 async def delete_chat_session(session_id: str, user_email: str = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Deletes a specific chat session and all its associated messages."""

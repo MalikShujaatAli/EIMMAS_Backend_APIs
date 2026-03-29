@@ -225,7 +225,7 @@ async def predict_text(input_data: TextInput):
             for emo, prob in prob_accumulator.items()
         } if valid_sentence_count > 0 else {}
 
-        logger.info(f"✅ Prediction Complete: {final_emotion}")
+        logger.info(f"Prediction Complete: {final_emotion}")
 
         return {
             "sentences": results,
@@ -234,7 +234,7 @@ async def predict_text(input_data: TextInput):
         }
 
     except Exception as e:
-        logger.error(f"🔥 ERROR DURING PREDICTION: {e}")
+        logger.error(f"ERROR DURING PREDICTION: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
