@@ -176,8 +176,8 @@ Chronological ordering was determined by cross-referencing the following signals
 | `text.ipynb` | Lighter text model exploration notebook (35KB) |
 | `speech.ipynb` | Audio model training notebook (93KB) |
 | `speech1.ipynb` | Second audio training notebook (47KB) |
-| `11.ipynb` | Additional training notebook (189KB) |
-| `test.ipynb` | Test/experimentation notebook |
+| `11.ipynb` | Phase 1 CNN training notebook (189KB) — `1.py`-equivalent architecture: 3-layer CNN on FER2013, 30 epochs, **57% accuracy**. Contains full training logs with per-epoch metrics. Output: `emotion_model.h5` |
+| `test.ipynb` | Empty file (0 bytes) — deleted or never written |
 
 ---
 

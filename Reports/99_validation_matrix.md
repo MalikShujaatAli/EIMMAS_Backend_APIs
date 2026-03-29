@@ -62,7 +62,7 @@ This document traces the complete lineage of every function, class, configuratio
 | MFCC delta/delta2 stacking | P6 (`emotion_api/main.py`) | P7 (MFCC only) | MFCC only (BiLSTM captures dynamics) |
 | Manual negation dictionary | P4 (`textemotion_tf212.py`) | P7 (removed) | Model handles negation natively |
 | Keyword-based context filter | P4 (`textemotion_tf212.py`) | P7 (removed) | Dual-threshold confidence filter |
-| Vosk offline speech recognition | P3 (`v5.py`, `v6.py`) | P6 (no transcription) | Groq Whisper API (P8 orchestrator) |
+| Vosk offline speech recognition | P3 (`v5.py`, `v6.py`) | P6 (no transcription) | Groq Whisper API (P9 orchestrator) |
 | `model.predict()` eager execution | P3 (all scripts) | P8 | `@tf.function` compiled graph |
 | Per-item prediction loops | P3-P7 (video frames, text sentences) | P8 | Batch tensor stacking |
 | Disk-based audio processing | P6 (`NamedTemporaryFile`) | P8 | `soundfile.read(BytesIO())` + FFmpeg RAM pipes |
