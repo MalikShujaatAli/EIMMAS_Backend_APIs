@@ -157,6 +157,8 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid token.")
 
 # ---------------------------------------------------------
+import shutil
+
 # 5. ASYNC MEDIA CONVERSION & MICROSERVICES
 # ---------------------------------------------------------
 async def process_and_clean_audio(file_bytes: bytes, is_video: bool = False) -> bytes:
@@ -164,6 +166,11 @@ async def process_and_clean_audio(file_bytes: bytes, is_video: bool = False) -> 
     CONVERSION ENGINE: Forced conversion to 16kHz, Mono, PCM 16-bit .WAV
     """
     logger.info(f"Initiating FFmpeg conversion... (Source is Video: {is_video})")
+    
+    if not shutil.which("ffmpeg"):
+        logger.error("CRITICAL ERROR: FFmpeg is not installed on this server or not in the PATH! Cannot extract audio from video.")
+        return None if is_video else file_bytes
+
     suffix = ".mp4" if is_video else ".tmp"
     in_path, out_path = None, None
     try:
@@ -173,9 +180,10 @@ async def process_and_clean_audio(file_bytes: bytes, is_video: bool = False) -> 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_out:
             out_path = temp_out.name
 
-        # ✅ FIX: Removed harsh loudnorm and denoise filters to preserve natural voice/accents
+        # ✅ FIX: Resolved ffmpeg executable absolute path for Windows compatibility
+        ffmpeg_exe = shutil.which("ffmpeg")
         process = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-i", in_path, "-vn", 
+            ffmpeg_exe, "-y", "-i", in_path, "-vn", 
             "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", out_path,
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
         )
@@ -189,7 +197,7 @@ async def process_and_clean_audio(file_bytes: bytes, is_video: bool = False) -> 
         with open(out_path, "rb") as f: return f.read()
         
     except Exception as e: 
-        logger.error(f"Error during media conversion: {str(e)}")
+        logger.error(f"Error during media conversion: {repr(e)}")
         return None if is_video else file_bytes 
     finally:
         if in_path and os.path.exists(in_path): os.remove(in_path)
