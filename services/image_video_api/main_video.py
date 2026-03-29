@@ -14,6 +14,7 @@ import warnings
 import asyncio
 import zipfile
 import urllib.request
+import uuid
 import numpy as np
 import cv2
 import mediapipe as mp
@@ -180,19 +181,21 @@ def process_video_file(temp_path):
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        # Security to prevent infinite loops on corrupted headers
         if total_frames <= 0:
             return all_probs
 
-        # FAST FORWARDING: Jump right to the frames we want to decode
-        for i in range(0, total_frames, 10):
-            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+        # LIGHTNING SPEED: Linear reading is physically faster than OpenCV Set/Seek on an MP4
+        frame_idx = 0
+        while True:
             ret, frame = cap.read()
             if not ret: break
             
-            face = extract_human_face(frame)
-            if face is not None:
-                all_probs.append(analyze_emotion(face))
+            # Analyze every 10th frame rapidly
+            if frame_idx % 10 == 0:
+                face = extract_human_face(frame)
+                if face is not None:
+                    all_probs.append(analyze_emotion(face))
+            frame_idx += 1
                 
     finally:
         # Guarantee OpenCV releases the file handle even if an error occurs
@@ -208,7 +211,8 @@ async def predict_video(file: UploadFile = File(...)):
     if file.size and file.size > 250 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File exceeds 250MB limit.")
         
-    temp_path = f"v_temp_{file.filename}"
+    # ✅ SECURITY FIX: Unique ID stops data races and Permission Locks on concurrent usage
+    temp_path = f"v_temp_{uuid.uuid4().hex}_{file.filename}"
     try:
         with open(temp_path, "wb") as f:
             f.write(await file.read())

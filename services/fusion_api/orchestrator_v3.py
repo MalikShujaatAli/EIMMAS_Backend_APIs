@@ -171,43 +171,34 @@ async def process_and_clean_audio(file_bytes: bytes, is_video: bool = False) -> 
         logger.error("CRITICAL ERROR: FFmpeg is not installed on this server or not in the PATH! Cannot extract audio from video.")
         return None if is_video else file_bytes
 
-    suffix = ".mp4" if is_video else ".tmp"
-    in_path, out_path = None, None
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_in:
-            temp_in.write(file_bytes)
-            in_path = temp_in.name
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_out:
-            out_path = temp_out.name
-
         import subprocess
         # ✅ FIX: Resolved ffmpeg executable absolute path for Windows compatibility
         ffmpeg_exe = shutil.which("ffmpeg")
         
-        # ✅ FIX: Windows Asyncio loop raises NotImplementedError for subprocesses in some configurations.
-        # Offloading the synchronous subprocess.run to a background thread completely bypasses this!
-        def _run_ffmpeg():
-            return subprocess.run(
-                [ffmpeg_exe, "-y", "-i", in_path, "-vn", 
-                 "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", out_path],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-        
-        process = await asyncio.to_thread(_run_ffmpeg)
+        # ✅ LIGHTNING SPEED RAM FIX: Removing Windows Disk Write overhead!
+        # Send raw bytes straight into FFmpeg's memory via pipe:0, and capture output bytes from pipe:1
+        def _run_ffmpeg_in_ram():
+            cmd = [
+                ffmpeg_exe, "-y", "-i", "pipe:0", "-vn",
+                "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
+                "-f", "wav", "pipe:1"
+            ]
+            # input=file_bytes perfectly streams RAM to stdin. stdout=subprocess.PIPE captures RAM output.
+            return subprocess.run(cmd, input=file_bytes, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            
+        process = await asyncio.to_thread(_run_ffmpeg_in_ram)
         
         if process.returncode != 0: 
             logger.error("FFmpeg Conversion Failed!")
             return None if is_video else file_bytes
             
-        logger.info("Successfully converted media to standard 16kHz WAV.")
-        with open(out_path, "rb") as f: return f.read()
+        logger.info("⚡ Successfully stripped Audio from Video natively in RAM (0 Disk IO).")
+        return process.stdout
         
     except Exception as e: 
-        logger.error(f"Error during media conversion: {repr(e)}")
-        return None if is_video else file_bytes 
-    finally:
-        if in_path and os.path.exists(in_path): os.remove(in_path)
-        if out_path and os.path.exists(out_path): os.remove(out_path)
+        logger.error(f"Error during RAM media conversion: {repr(e)}")
+        return None if is_video else file_bytes
 
 async def transcribe_audio_to_text(audio_bytes: bytes) -> str:
     try:

@@ -121,7 +121,8 @@ try:
         tokenizer = pickle.load(handle)
     logger.info("✅ Tokenizer loaded.")
 except Exception as e:
-    logger.error(f"❌ Tokenizer failed: {e}")
+    logger.error(f"❌ CRITICAL ERROR: Tokenizer config failed: {e}")
+    sys.exit(1)
 
 logger.info("⏳ Loading Text Model...")
 try:
@@ -133,7 +134,8 @@ try:
 
     logger.info("✅ Model loaded and warmed up!")
 except Exception as e:
-    logger.error(f"❌ Model failed: {e}")
+    logger.error(f"❌ CRITICAL ERROR: AI Neural Model failed to load: {e}")
+    sys.exit(1)
 
 # ===================================
 # 4) ENDPOINTS
@@ -158,6 +160,13 @@ async def predict_text(input_data: TextInput):
 
     try:
         sentences = [clean_text(s) for s in sent_tokenize(text)]
+        
+        # ✅ SAFETY SHIELD: Filter out any sentences that were reduced to blank spaces (e.g., if user sent pure emojis)
+        sentences = [s for s in sentences if len(s.strip()) > 1]
+        if not sentences:
+            logger.warning("All input text was stripped (mostly emojis/symbols). Bypassing ML.")
+            return {"sentences": [], "final_emotion": "context unclear", "weighted_probabilities": {}}
+            
         sequences = tokenizer.texts_to_sequences(sentences)
         padded_seqs = pad_sequences(
         sequences,
