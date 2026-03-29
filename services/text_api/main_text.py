@@ -72,9 +72,9 @@ logger = logging.getLogger(__name__)
 try:
     # Check if we have the package before booting
     nltk.data.find('tokenizers/punkt')
-    logger.info("✅ NLTK punkt data verified locally.")
+    logger.info("NLTK punkt data verified locally.")
 except LookupError:
-    logger.error("❌ CRITICAL: NLTK punkt data missing. Please run setup_nltk.py on the server first.")
+    logger.error("CRITICAL: NLTK punkt data missing. Please run setup_nltk.py on the server first.")
 
 # ===================================
 # 1) CONFIGURATION & LABELS
@@ -115,21 +115,21 @@ class TextInput(BaseModel):
 
 app = FastAPI(title="Production Text Emotion API")
 
-logger.info("⏳ Loading Tokenizer...")
+logger.info("Loading Tokenizer...")
 try:
     with open(TOKENIZER_PATH, 'rb') as handle:
         tokenizer = pickle.load(handle)
-    logger.info("✅ Tokenizer loaded.")
+    logger.info("Tokenizer loaded.")
 except Exception as e:
-    logger.error(f"❌ CRITICAL ERROR: Tokenizer config failed: {e}")
+    logger.error(f"CRITICAL ERROR: Tokenizer config failed: {e}")
     sys.exit(1)
 
-logger.info("⏳ Loading Text Model...")
+logger.info("Loading Text Model...")
 try:
     custom_objects = {'AttentionLayer': AttentionLayer, 'Custom>AttentionLayer': AttentionLayer}
     model = keras.models.load_model(MODEL_PATH, custom_objects=custom_objects)
 
-    # ⚡ LIGHTNING SPEED FIX: Compile the Python model into a static C++ Graph!
+    # LIGHTNING SPEED FIX: Compile the Python model into a static C++ Graph!
     @tf.function(reduce_retracing=True)
     def compute_inference(tensor_input):
         return model(tensor_input, training=False)
@@ -137,9 +137,9 @@ try:
     dummy_text = pad_sequences(tokenizer.texts_to_sequences(["warmup"]), maxlen=MAX_LEN)
     _ = compute_inference(dummy_text)
 
-    logger.info("✅ Model loaded and warmed up!")
+    logger.info("Model loaded and warmed up!")
 except Exception as e:
-    logger.error(f"❌ CRITICAL ERROR: AI Neural Model failed to load: {e}")
+    logger.error(f"CRITICAL ERROR: AI Neural Model failed to load: {e}")
     sys.exit(1)
 
 # ===================================
@@ -162,7 +162,7 @@ async def predict_text(input_data: TextInput):
     try:
         sentences = [clean_text(s) for s in sent_tokenize(text)]
         
-        # ✅ SAFETY SHIELD: Filter out any sentences that were reduced to blank spaces (e.g., if user sent pure emojis)
+        # SAFETY SHIELD: Filter out any sentences that were reduced to blank spaces (e.g., if user sent pure emojis)
         sentences = [s for s in sentences if len(s.strip()) > 1]
         if not sentences:
             logger.warning("All input text was stripped (mostly emojis/symbols). Bypassing ML.")
@@ -175,8 +175,8 @@ async def predict_text(input_data: TextInput):
         padding='post',
         truncating='post'
         )
-
-        # ⚡ LIGHTNING SPEED FIX: Offload computation to background thread to free up FastAPI!
+ 
+        # LIGHTNING SPEED FIX: Offload computation to background thread to free up FastAPI!
         def _run_model():
             return compute_inference(padded_seqs).numpy()
             

@@ -60,7 +60,7 @@ INT_TO_EMOTION = {
     3: 'happy', 4: 'neutral', 5: 'sad', 6: 'surprised'
 }
 
-# --- 🚀 TFLITE BOOTSTRAP ---
+# --- TFLITE BOOTSTRAP ---
 interpreter = None
 input_details = None
 output_details = None
@@ -69,16 +69,28 @@ audio_model = None
 def load_audio_model():
     global interpreter, input_details, output_details, audio_model
     if os.path.exists(TFLITE_PATH):
-        logger.info(f"⚡ Loading TFLite Model: {TFLITE_PATH} (Optimized for CPU)")
-        interpreter = tf.lite.Interpreter(model_path=TFLITE_PATH)
-        interpreter.allocate_tensors()
-        input_details = interpreter.get_input_details()
-        output_details = interpreter.get_output_details()
-    elif os.path.exists(MODEL_PATH):
-        logger.warning(f"⚠️ {TFLITE_PATH} not found. Falling back to heavy TensorFlow: {MODEL_PATH}")
+        try:
+            # Removed emoji to prevent Windows console UnicodeEncodeError
+            logger.info(f"Loading TFLite Model: {TFLITE_PATH} (Optimized for CPU)")
+            
+            # Note: BiLSTMs often require Flex Ops. 
+            # If this fails, the try-block catches it and falls back to Keras.
+            interpreter = tf.lite.Interpreter(model_path=TFLITE_PATH)
+            interpreter.allocate_tensors()
+            
+            input_details = interpreter.get_input_details()
+            output_details = interpreter.get_output_details()
+            logger.info("TFLite Model loaded successfully.")
+            return
+        except Exception as e:
+            logger.warning(f"TFLite loading failed, falling back to Keras. Error: {e}")
+            interpreter = None
+
+    if os.path.exists(MODEL_PATH):
+        logger.info(f"Loading heavy TensorFlow model: {MODEL_PATH}")
         audio_model = tf.keras.models.load_model(MODEL_PATH)
     else:
-        logger.error(f"❌ Critical Error: No audio model found in {os.getcwd()}.")
+        logger.error(f"Critical Error: No audio model found in {os.getcwd()}.")
 
 load_audio_model()
 
@@ -126,7 +138,7 @@ def get_features_fast(audio_bytes):
         if len(audio.shape) > 1:
             audio = np.mean(audio, axis=1)
             
-        # ⚡ LIGHTNING SPEED: Bypass librosa's heavy mathematical resampling 
+        # LIGHTNING SPEED: Bypass librosa's heavy mathematical resampling 
         # if the Orchestrator has already forced 16kHz via FFmpeg.
         if sr != SAMPLE_RATE:
             logger.info(f"Resampling audio from {sr} to {SAMPLE_RATE}...")
@@ -149,7 +161,7 @@ def get_features_fast(audio_bytes):
         else:
             mfccs = mfccs[:, :MAX_PAD_LEN]
             
-        # 🧪 ACCURACY FIX: Z-score Normalization
+        # ACCURACY FIX: Z-score Normalization
         # Most RAVDESS models expect normalized MFCCs. This fixes 'False Angry' bias.
         mean = np.mean(mfccs)
         std = np.std(mfccs) + 1e-9

@@ -38,7 +38,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         logging.StreamHandler(sys.stdout),       
-        logging.FileHandler(LOG_FILE, encoding="utf-8") # ✅ FIX 1: Added UTF-8 encoding so emojis/languages don't crash Windows            
+        logging.FileHandler(LOG_FILE, encoding="utf-8") # FIX 1: Added UTF-8 encoding so emojis/languages don't crash Windows            
     ]
 )
 logger = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ WEIGHTS = {
 # This physically opens the .env file and loads your keys into memory
 load_dotenv() 
 
-# 🚀 ENVIRONMENT TOGGLE 🚀
+# ENVIRONMENT TOGGLE
 # Set to True for your Final FYP Presentation (Uses Groq 70B)
 # Set to False for daily testing and QA (Uses Cerebras 8B)
 USE_PRODUCTION_MODEL = False
@@ -173,10 +173,10 @@ async def process_and_clean_audio(file_bytes: bytes, is_video: bool = False) -> 
 
     try:
         import subprocess
-        # ✅ FIX: Resolved ffmpeg executable absolute path for Windows compatibility
+        # FIX: Resolved ffmpeg executable absolute path for Windows compatibility
         ffmpeg_exe = shutil.which("ffmpeg")
         
-        # ✅ LIGHTNING SPEED RAM FIX: Removing Windows Disk Write overhead!
+        # LIGHTNING SPEED RAM FIX: Removing Windows Disk Write overhead!
         # Send raw bytes straight into FFmpeg's memory via pipe:0, and capture output bytes from pipe:1
         def _run_ffmpeg_in_ram():
             cmd = [
@@ -193,7 +193,7 @@ async def process_and_clean_audio(file_bytes: bytes, is_video: bool = False) -> 
             logger.error("FFmpeg Conversion Failed!")
             return None if is_video else file_bytes
             
-        logger.info("⚡ Successfully stripped Audio from Video natively in RAM (0 Disk IO).")
+        logger.info("Successfully stripped Audio from Video natively in RAM (0 Disk IO).")
         return process.stdout
         
     except Exception as e: 

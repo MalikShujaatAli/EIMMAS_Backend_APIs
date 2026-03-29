@@ -85,7 +85,7 @@ try:
     logger.info("Loading Vision AI Model into memory...")
     emotion_model = tf.keras.models.load_model(FACE_MODEL_PATH)
     
-    # ⚡ LIGHTNING SPEED FIX: Compile Video inference into static C++ Graph
+    # LIGHTNING SPEED FIX: Compile Video inference into static C++ Graph
     @tf.function(reduce_retracing=True)
     def compute_vision_inference(tensor_input):
         return emotion_model(tensor_input, training=False)
@@ -127,10 +127,10 @@ def extract_human_face(image_bgr):
 
 def analyze_emotion(face_gray):
     """Full probability prediction logic."""
-    # ✅ FIX 2: Apply CLAHE for lighting correction
+    # FIX 2: Apply CLAHE for lighting correction
     face_clahe = clahe.apply(face_gray)
     
-    # ✅ FIX 3: Force CUBIC interpolation
+    # FIX 3: Force CUBIC interpolation
     resized = cv2.resize(face_clahe, (112, 112), interpolation=cv2.INTER_CUBIC)
     
     inp = (resized.astype("float32") / 255.0).reshape(1, 112, 112, 1)
