@@ -307,8 +307,8 @@ def fuse_emotions(results):
     
     # 🚨 LOOPHOLE 3 FIX: CONTRADICTION ENGINE (AFFECTIVE MASKING DETECTOR)
     # If the text says negative emotions, but visual/audio says Joy, alert the LLM!
-    has_negative_text = any(res["data"].get("final_emotion", "") in ["sad", "fear", "anger"] for res in results if res["source"] == "text")
-    has_positive_media = any(res["data"].get("predicted_emotion", "") == "joy" for res in results if res["source"] in ["audio", "video"])
+    has_negative_text = any(res["data"].get("final_emotion", "") in ["sad", "fear", "anger"] for res in results if res["source"] == "text" and res.get("data"))
+    has_positive_media = any(res["data"].get("predicted_emotion", "") == "joy" for res in results if res["source"] in ["audio", "video"] and res.get("data"))
     
     if has_negative_text and has_positive_media:
         logger.warning("🚨 CONTRADICTION DETECTED: Masked Emotion (Smiling while sad/angry).")
