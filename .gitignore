@@ -1,0 +1,27 @@
+# Python / FastAPI Cache
+__pycache__/
+*.py[cod]
+
+# Virtual Environments (CRITICAL - Ignores all venvs in subfolders)
+venv/
+services/**/venv/
+env/
+.env
+
+# AI / ML Models (Too large for standard GitHub)
+*.keras
+*.tflite
+*.pkl
+*.zip
+*.h5
+
+# Databases & Logs
+*.db
+*.sqlite3
+logs/
+*.log
+
+# Media / Temp files
+*.wav
+*.mp4
+*.tmp
