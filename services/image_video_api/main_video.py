@@ -1,8 +1,17 @@
 import os
 import sys
+
+# ---------------------------------------------------------
+# 1. ENVIRONMENT & WARNING SUPPRESSION
+# ---------------------------------------------------------
+# Must be set BEFORE importing tensorflow
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 import time
 import logging
 import warnings
+import asyncio
 import zipfile
 import urllib.request
 import numpy as np
@@ -16,11 +25,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # ---------------------------------------------------------
-# 1. ENVIRONMENT & PROFESSIONAL LOGGING
+# 2. PROFESSIONAL LOGGING
 # ---------------------------------------------------------
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 warnings.filterwarnings('ignore')
 
 # Automatically locate the central \logs\ directory
@@ -162,29 +168,52 @@ async def predict_image(file: UploadFile = File(...)):
         logger.error(f"Image prediction failed: {e}")
         return {"error": str(e)}
 
+def process_video_file(temp_path):
+    """Processes video fully in memory off the main event loop thread."""
+    cap = cv2.VideoCapture(temp_path)
+    all_probs = []
+    
+    try:
+        if not cap.isOpened():
+            return all_probs
+            
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Security to prevent infinite loops on corrupted headers
+        if total_frames <= 0:
+            return all_probs
+
+        # FAST FORWARDING: Jump right to the frames we want to decode
+        for i in range(0, total_frames, 10):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+            ret, frame = cap.read()
+            if not ret: break
+            
+            face = extract_human_face(frame)
+            if face is not None:
+                all_probs.append(analyze_emotion(face))
+                
+    finally:
+        # Guarantee OpenCV releases the file handle even if an error occurs
+        cap.release()
+        
+    return all_probs
+
 @app.post("/predict_video")
 async def predict_video(file: UploadFile = File(...)):
     start_time = time.time()
     logger.info(f"Receiving video request: {file.filename}")
+    
+    if file.size and file.size > 250 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File exceeds 250MB limit.")
+        
     temp_path = f"v_temp_{file.filename}"
     try:
         with open(temp_path, "wb") as f:
             f.write(await file.read())
 
-        cap = cv2.VideoCapture(temp_path)
-        all_probs = []
-        frame_idx = 0
-
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret: break
-            if frame_idx % 10 == 0:
-                face = extract_human_face(frame)
-                if face is not None:
-                    all_probs.append(analyze_emotion(face))
-            frame_idx += 1
-        cap.release()
-        os.remove(temp_path)
+        all_probs = await asyncio.to_thread(process_video_file, temp_path)
 
         if not all_probs:
             logger.warning("No human face detected in video stream.")
@@ -204,8 +233,9 @@ async def predict_video(file: UploadFile = File(...)):
         }
     except Exception as e:
         logger.error(f"Video prediction failed: {e}")
-        if os.path.exists(temp_path): os.remove(temp_path)
         return {"error": str(e)}
+    finally:
+        if os.path.exists(temp_path): os.remove(temp_path)
 
 if __name__ == "__main__":
     logger.info("Starting Uvicorn server on PORT 8002...")

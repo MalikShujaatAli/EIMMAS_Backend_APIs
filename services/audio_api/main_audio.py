@@ -1,9 +1,18 @@
 import os
 import io
+
+# ---------------------------------------------------------
+# 1. ENVIRONMENT & WARNING SUPPRESSION
+# ---------------------------------------------------------
+# Must be set BEFORE importing tensorflow
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
 import sys
 import time
 import logging
 import warnings
+import asyncio
 import numpy as np
 import tensorflow as tf
 import librosa
@@ -13,10 +22,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # ---------------------------------------------------------
-# 1. ENVIRONMENT & PROFESSIONAL LOGGING
+# 2. PROFESSIONAL LOGGING
 # ---------------------------------------------------------
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Suppress TF C++ warnings
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 warnings.filterwarnings('ignore')
 
 # Automatically locate the central \logs\ directory
@@ -43,7 +50,7 @@ SAMPLE_RATE = 16000
 N_MFCC = 40
 MAX_PAD_LEN = 174
 CONFIDENCE_THRESHOLD = 0.40
-MAX_FILE_SIZE_MB = 10
+MAX_FILE_SIZE_MB = 50
 MODEL_PATH = "audio_best_model.keras"
 
 INT_TO_EMOTION = {
@@ -73,9 +80,14 @@ try:
     
     model = tf.keras.models.load_model(MODEL_PATH)
     
+    # XLA Compilation Wrapper for lightning fast inference
+    @tf.function(jit_compile=True)
+    def compute_inference(tensor_input):
+        return model(tensor_input, training=False)
+    
     # PERFORMANCE WARMUP: Ensures the first request isn't slow
     dummy_input = np.zeros((1, MAX_PAD_LEN, N_MFCC))
-    _ = model(dummy_input, training=False)
+    _ = compute_inference(dummy_input)
     
     logger.info("Audio Model loaded successfully!")
 except Exception as e:
@@ -134,20 +146,20 @@ async def predict_audio(file: UploadFile = File(...)):
     logger.info(f"Receiving audio request: {file.filename}")
     
     try:
+        # Security: Size limit check BEFORE reading into memory
+        if file.size and file.size > MAX_FILE_SIZE_MB * 1024 * 1024:
+            raise HTTPException(status_code=413, detail=f"File exceeds {MAX_FILE_SIZE_MB}MB limit.")
+
         # Read file into memory buffer
         content = await file.read()
-        
-        # Security: Size limit
-        if len(content) / (1024*1024) > MAX_FILE_SIZE_MB:
-            raise HTTPException(status_code=413, detail="File too large.")
 
-        # Preprocess
-        tensor = get_features_fast(content)
+        # Preprocess asynchronously to avoid freezing the event loop
+        tensor = await asyncio.to_thread(get_features_fast, content)
         if tensor is None:
             raise HTTPException(status_code=400, detail="Audio file is corrupted or silent.")
 
-        # DIRECT INFERENCE: Faster than model.predict() for single requests
-        prediction_tensor = model(tensor, training=False)
+        # DIRECT INFERENCE: Faster than model.predict(), compiled via XLA, run on separate thread
+        prediction_tensor = await asyncio.to_thread(compute_inference, tensor)
         prediction = prediction_tensor.numpy()[0]
         
         # Post-processing

@@ -25,3 +25,7 @@ logs/
 *.wav
 *.mp4
 *.tmp
+
+# Backend Issues Log
+problems to fix.txt
+HWMonitor.txt

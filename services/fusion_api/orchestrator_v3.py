@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import delete
 from groq import AsyncGroq 
 from cerebras.cloud.sdk import AsyncCerebras
 from contextlib import asynccontextmanager
@@ -79,11 +80,17 @@ cerebras_client = AsyncCerebras(api_key=CEREBRAS_API_KEY)
 # ---------------------------------------------------------
 # 3. APP INITIALIZATION & LIFECYCLE
 # ---------------------------------------------------------
+# Connection Pool for backend Microservices
+http_client: httpx.AsyncClient = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting Fusion API... Initializing SQLite Database.")
+    global http_client
+    http_client = httpx.AsyncClient(limits=httpx.Limits(max_keepalive_connections=100, max_connections=200))
+    logger.info("Starting Fusion API... Initializing SQLite Database and Connection Pool.")
     await init_db()
     yield
+    await http_client.aclose()
     logger.info("Shutting down Fusion API gracefully...")
 
 app = FastAPI(title="Master Extraction & Fusion Orchestrator API - Enterprise Edition", lifespan=lifespan)
@@ -506,22 +513,22 @@ async def analyze_multimodal(
     # 3. Parallel API Processing (ONLY IF SAFE)
     # ---------------------------------------------------------
     if not is_critical_override:
-        async with httpx.AsyncClient() as client:
-            tasks = []
-            if text: 
-                tasks.append(fetch_text_api(client, text))
-            
-            # AUDIO GATE: Only send to Audio ML if Whisper confirmed someone actually spoke words!
-            if audio_bytes and text: 
-                tasks.append(fetch_file_api(client, audio_bytes, "clean.wav", "audio/wav", "audio", API_URLS["audio"]))
-            
-            # IMAGE/VIDEO GATE: Image/Video models will handle "no face" on their own side
-            if image_bytes: 
-                tasks.append(fetch_file_api(client, image_bytes, image.filename, image.content_type, "image", API_URLS["image"]))
-            if video_bytes: 
-                tasks.append(fetch_file_api(client, video_bytes, video.filename, video.content_type, "video", API_URLS["video"]))
-            
-            api_results = await asyncio.gather(*tasks)
+        # Avoid 300ms network handshakes by reusing our pre-warmed connection pool
+        tasks = []
+        if text: 
+            tasks.append(fetch_text_api(http_client, text))
+        
+        # AUDIO GATE: Only send to Audio ML if Whisper confirmed someone actually spoke words!
+        if audio_bytes and text: 
+            tasks.append(fetch_file_api(http_client, audio_bytes, "clean.wav", "audio/wav", "audio", API_URLS["audio"]))
+        
+        # IMAGE/VIDEO GATE: Image/Video models will handle "no face" on their own side
+        if image_bytes: 
+            tasks.append(fetch_file_api(http_client, image_bytes, image.filename, image.content_type, "image", API_URLS["image"]))
+        if video_bytes: 
+            tasks.append(fetch_file_api(http_client, video_bytes, video.filename, video.content_type, "video", API_URLS["video"]))
+        
+        api_results = await asyncio.gather(*tasks)
 
         # 4. Fusion
         raw_api_data = {res["source"]: res["data"] for res in api_results if res["data"] is not None}
@@ -602,13 +609,9 @@ async def delete_chat_session(session_id: str, user_email: str = Depends(get_cur
     if not session_to_delete:
         raise HTTPException(status_code=404, detail="Chat not found or you do not have permission to delete it.")
 
-    # Step 2: Fetch and delete all messages associated with this session (Clean up orphaned data)
-    msg_stmt = select(ChatMessage).where(ChatMessage.session_id == session_id)
-    msg_result = await db.execute(msg_stmt)
-    messages = msg_result.scalars().all()
-    
-    for msg in messages:
-        await db.delete(msg)
+    # Step 2: Fetch and delete all messages associated with this session using a bulk delete
+    del_stmt = delete(ChatMessage).where(ChatMessage.session_id == session_id)
+    await db.execute(del_stmt)
 
     # Step 3: Delete the actual session folder
     await db.delete(session_to_delete)

@@ -1,5 +1,17 @@
 import os
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3" 
+import warnings
+
+# ===================================
+# 0) ENVIRONMENT & WARNING CONTROLS
+# ===================================
+# Must be set BEFORE importing tensorflow or keras
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+warnings.filterwarnings("ignore")
+import logging
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
 
 import pickle
 import logging
@@ -16,27 +28,53 @@ from nltk.tokenize import sent_tokenize
 
 import re
 
+# PRE-COMPILE REGEX FOR HEAVY WORKLOADS
+URL_REGEX = re.compile(r'http\S+|www\S+|https\S+')
+HTML_REGEX = re.compile(r'<.*?>')
+TAG_REGEX = re.compile(r'\@w+|\#')
+CHAR_REGEX = re.compile(r'[^a-zA-Z\s]')
+SPACE_REGEX = re.compile(r'\s+')
+
 def clean_text(text):
     text = str(text).lower()
-    text = re.sub(r'http\S+|www\S+|https\S+', '', text)
-    text = re.sub(r'<.*?>', '', text)
-    text = re.sub(r'\@w+|\#','', text)
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = URL_REGEX.sub('', text)
+    text = HTML_REGEX.sub('', text)
+    text = TAG_REGEX.sub('', text)
+    text = CHAR_REGEX.sub('', text)
+    text = SPACE_REGEX.sub(' ', text).strip()
     return text
+
+import sys
+import os
 
 # ===================================
 # 0) LOGGING SETUP
 # ===================================
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+# Automatically locate the central \logs\ directory
+LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "logs"))
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOG_DIR, "text_api.log")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(LOG_FILE, encoding="utf-8")
+    ]
+)
 logger = logging.getLogger(__name__)
 
+# NOTE: nltk.download('punkt') was removed from the global scope.
+# It MUST be run statically during build/deployment via setup_nltk.py
+# This prevents the container from crashing or hanging if NLTK servers are offline.
 try:
-    # ✅ FIX: correct tokenizer
-    nltk.download('punkt', quiet=True)
-    logger.info("✅ NLTK punkt checked.")
-except Exception as e:
-    logger.error(f"❌ NLTK Download failed: {e}")
+    # Check if we have the package before booting
+    nltk.data.find('tokenizers/punkt')
+    logger.info("✅ NLTK punkt data verified locally.")
+except LookupError:
+    logger.error("❌ CRITICAL: NLTK punkt data missing. Please run setup_nltk.py on the server first.")
 
 # ===================================
 # 1) CONFIGURATION & LABELS
