@@ -173,9 +173,14 @@ async def predict_image(file: UploadFile = File(...)):
             "probabilities": {EMOTION_LABELS[i]: round(float(probs[i]), 4) for i in range(len(EMOTION_LABELS))},
             "processing_time": f"{latency}s"
         }
+    except HTTPException as he:
+        # Expected 'no face' scenarios are just warnings
+        logger.warning(f"Image request rejected: {he.detail}")
+        return {"error": he.detail, "face_detected": False}
     except Exception as e:
-        logger.error(f"Image prediction failed: {e}")
-        return {"error": str(e)}
+        # Actual ML/System crashes are Errors
+        logger.error(f"Image prediction crashed: {e}")
+        return {"error": "Internal processing error.", "face_detected": False}
 
 def preprocess_face(face_gray):
     """CLAHE + resize + normalize a single grayscale face into a model-ready tensor."""
@@ -260,9 +265,12 @@ async def predict_video(file: UploadFile = File(...)):
             "probabilities": {EMOTION_LABELS[i]: round(float(avg_probs[i]), 4) for i in range(len(EMOTION_LABELS))},
             "processing_time": f"{latency}s"
         }
+    except HTTPException as he:
+        logger.warning(f"Video request rejected: {he.detail}")
+        return {"error": he.detail, "face_detected": False}
     except Exception as e:
-        logger.error(f"Video prediction failed: {e}")
-        return {"error": str(e)}
+        logger.error(f"Video prediction crashed: {e}")
+        return {"error": "Internal processing error.", "face_detected": False}
     finally:
         if os.path.exists(temp_path): os.remove(temp_path)
 
