@@ -158,7 +158,24 @@ async def predict_text(input_data: TextInput):
     if not text or not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
-    # Removed destructive length filter: "I'm sad" (2 words) should be analyzed!
+    raw_text = text.strip().lower()
+    
+    # THE FIX: Intercept short texts/greetings before the AI sees them!
+    # Because ML models hallucinate without context, we bypass the heavy graph
+    # for 1-2 word phrases (e.g. 'hi', 'hello') and gracefully degrade to neutral.
+    word_count = len(raw_text.split())
+    if word_count <= 2:
+        logger.info(f"Short text bypassed ('{raw_text}') -> context unclear.")
+        return {
+            "sentences": [{
+                "sentence": text, 
+                "emotion": "context unclear", 
+                "probabilities": {}
+            }],
+            "final_emotion": "context unclear",
+            "weighted_probabilities": {}
+        }
+
     try:
         sentences = [clean_text(s) for s in sent_tokenize(text)]
         

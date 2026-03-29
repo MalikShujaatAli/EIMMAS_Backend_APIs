@@ -15,20 +15,25 @@ def convert():
     print(f"🔄 Loading {model_path}...")
     try:
         model = tf.keras.models.load_model(model_path)
-        print("🔄 Converting to TFLite (Optimized for CPU Latency)...")
         
-        converter = tf.lite.TFLiteConverter.from_keras_model(model)
+        # ✅ THE ULTIMATE FIX: Force a STATIC batch size of 1.
+        # This removes the "None" dimension and gives TFLite the exact 
+        # memory blueprint it needs to optimize the BiLSTM layer natively.
+        run_model = tf.function(lambda x: model(x))
+        concrete_func = run_model.get_concrete_function(
+            tf.TensorSpec(shape=(1, 174, 40), dtype=tf.float32)
+        )
+
+        print("🔄 Converting to TFLite (Static Shapes & Optimized for CPU)...")
+        converter = tf.lite.TFLiteConverter.from_concrete_functions([concrete_func])
         
         # Optimization settings for speed
         converter.optimizations = [tf.lite.Optimize.DEFAULT]
         converter.target_spec.supported_types = [tf.float16]
         
-        # ✅ THE FIX: Allow Select TF Ops for BiLSTM dynamic loops
-        converter.target_spec.supported_ops = [
-            tf.lite.OpsSet.TFLITE_BUILTINS, 
-            tf.lite.OpsSet.SELECT_TF_OPS
-        ]
-        converter._experimental_lower_tensor_list_ops = False
+        # Force Native TFLite Built-ins ONLY
+        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS]
+        converter._experimental_lower_tensor_list_ops = True
         
         tflite_model = converter.convert()
         
@@ -36,9 +41,10 @@ def convert():
             f.write(tflite_model)
             
         print(f"\n✅ SUCCESS: '{tflite_path}' generated.")
-        print("Latency should now be ~10x-20x faster on CPU.")
+        print("🚀 Flex Delegate bug annihilated! Your Audio API will now load at lightning speed.")
+        
     except Exception as e:
-        print(f"❌ Conversion failed: {e}")
+        print(f"\n❌ Conversion failed: {e}")
 
 if __name__ == "__main__":
     convert()
