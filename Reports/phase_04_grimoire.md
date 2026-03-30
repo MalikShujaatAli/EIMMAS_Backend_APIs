@@ -6,19 +6,19 @@
 
 | File | Size (bytes) | Role |
 |---|---|---|
-| `FYP old/textemo.py` | 2,869 | First BiLSTM text model trainer |
-| `FYP old/textcalemo.py` | 968 | CNN-based text emotion predictor |
-| `FYP old/textemotion.py` | 2,971 | AttentionLayer text tester with glob discovery |
-| `FYP old/textemotion_tf212.py` | 5,324 | Advanced text predictor with negation engine |
-| `FYP old/BiLSTM 1.py` | 3,845 | Text predictor with AttentionLayer (K.tanh/K.dot) |
-| `FYP old/BiLSTM app.py` | 6,211 | First text emotion FastAPI endpoint |
-| `FYP old/emotion_api/testtext.py` | 5,324 | Byte-identical copy of `textemotion_tf212.py` |
+| `FYP old/phase04_text_bilstm_trainer.py` | 2,869 | First BiLSTM text model trainer |
+| `FYP old/phase04_text_cnn_predictor.py` | 968 | CNN-based text emotion predictor |
+| `FYP old/phase04_text_attention_tester.py` | 2,971 | AttentionLayer text tester with glob discovery |
+| `FYP old/phase04_text_negation_engine.py` | 5,324 | Advanced text predictor with negation engine |
+| `FYP old/phase04_text_bilstm_attention_v1.py` | 3,845 | Text predictor with AttentionLayer (K.tanh/K.dot) |
+| `FYP old/phase04_text_api_bilstm_keyword.py` | 6,211 | First text emotion FastAPI endpoint |
+| `FYP old/phase04_text_negation_engine_copy.py` | 5,324 | Byte-identical copy of `phase04_text_negation_engine.py` |
 
 ---
 
 ## Header 2: Line-by-Line Logic Migration
 
-### File: `textemo.py` (Complete Source)
+### File: `phase04_text_bilstm_trainer.py` (Complete Source)
 
 ```python
 import numpy as np
@@ -120,7 +120,7 @@ print("✅ Model, tokenizer, and label encoder saved to current directory.")
 - **`padding='post'`**: Zero-padding is added after the text, not before. This convention is preserved through all phases.
 
 #### Block 4: BiLSTM Architecture (Lines 52-59)
-- **No Attention mechanism**: This is a plain `Bidirectional(LSTM(128))` — every LSTM hidden state has equal weight in the final representation. The custom `AttentionLayer` is not introduced until `textemotion.py`.
+- **No Attention mechanism**: This is a plain `Bidirectional(LSTM(128))` — every LSTM hidden state has equal weight in the final representation. The custom `AttentionLayer` is not introduced until `phase04_text_attention_tester.py`.
 - **`recurrent_dropout=0.3`**: Applies dropout within the LSTM recurrence. This was removed in later phases because it prevents CuDNN kernel acceleration on GPU.
 - **`Embedding(input_dim=max_words, output_dim=128)`**: Learns 128-dimensional word vectors from scratch. No pretrained embeddings (GloVe, Word2Vec) are used.
 
@@ -134,7 +134,7 @@ print("✅ Model, tokenizer, and label encoder saved to current directory.")
 
 ---
 
-### File: `textcalemo.py` (Complete Source)
+### File: `phase04_text_cnn_predictor.py` (Complete Source)
 
 ```python
 from tensorflow.keras.models import load_model
@@ -169,15 +169,15 @@ while True:
 ```
 
 #### Analysis
-- **Different model**: `emotion_TEXT_cnn_model.h5` — a CNN-based text model (NOT the BiLSTM from `textemo.py`). This confirms that multiple model architectures were tested in parallel.
-- **`maxlen=100`**: Different from `textemo.py`'s `max_len=50`. This means the CNN model was trained with a different preprocessing pipeline.
+- **Different model**: `emotion_TEXT_cnn_model.h5` — a CNN-based text model (NOT the BiLSTM from `phase04_text_bilstm_trainer.py`). This confirms that multiple model architectures were tested in parallel.
+- **`maxlen=100`**: Different from `phase04_text_bilstm_trainer.py`'s `max_len=50`. This means the CNN model was trained with a different preprocessing pipeline.
 - **`pickle.load(open(..., 'rb'))`**: File handle is never explicitly closed. A minor resource leak pattern.
 - **No sentence splitting**: The entire input text is processed as a single sequence. No `sent_tokenize()`. This is the simplest approach but loses per-sentence granularity.
 - **No confidence filtering**: The argmax prediction is returned regardless of confidence. No threshold, no "context unclear" fallback.
 
 ---
 
-### File: `textemotion.py` (Complete Source)
+### File: `phase04_text_attention_tester.py` (Complete Source)
 
 ```python
 import tensorflow as tf
@@ -280,15 +280,15 @@ while True:
 #### Critical Artifacts
 
 - **First `AttentionLayer` appearance**: This is where the custom attention mechanism was born. The implementation uses `tf.tensordot` to compute attention scores, `tf.nn.softmax` for normalization, and `tf.reduce_sum` for weighted pooling. The weight shape is `(dim,)` — a 1D vector, making this a simplified "additive attention" variant.
-- **`AttentionLayer` evolution**: In `textemotion.py`, the weight shape is `(dim,)` with `glorot_uniform` initializer. In `2nd attempt Text.txt`, it becomes `(input_shape[-1], 1)` with `normal` initializer, and the computation changes to `K.tanh(K.dot(x, self.W) + self.b)` — a more standard Bahdanau-style attention. In Phase 9's `main_text.py`, the ops change to `keras.ops.tanh`/`ops.matmul`/`ops.softmax`/`ops.sum` for Keras 3 compatibility.
+- **`AttentionLayer` evolution**: In `phase04_text_attention_tester.py`, the weight shape is `(dim,)` with `glorot_uniform` initializer. In `phase07_text_api_standalone.txt`, it becomes `(input_shape[-1], 1)` with `normal` initializer, and the computation changes to `K.tanh(K.dot(x, self.W) + self.b)` — a more standard Bahdanau-style attention. In Phase 9's `phase08_text_api_preprod.py`, the ops change to `keras.ops.tanh`/`ops.matmul`/`ops.softmax`/`ops.sum` for Keras 3 compatibility.
 - **`glob.glob("trained_models/aa/...")`**: Dynamic model file discovery by sorting glob matches and taking the last (most recent) file. This was replaced by explicit path constants in all later phases.
 - **`PorterStemmer` — imported, never used**: `stemmer = PorterStemmer()` is defined on line 15 but `stemmer` is never called anywhere in the script. This is evidence of an abandoned NLP preprocessing step — the developer considered stemming words before tokenization but decided against it (likely because the tokenizer was trained on unstemmed text, so stemming at inference time would cause vocabulary mismatches).
-- **`maxlen=60`**: Different from `textemo.py`'s 50 and `textcalemo.py`'s 100. This is the third distinct `maxlen` value, indicating that model retraining happened multiple times with different configurations.
+- **`maxlen=60`**: Different from `phase04_text_bilstm_trainer.py`'s 50 and `phase04_text_cnn_predictor.py`'s 100. This is the third distinct `maxlen` value, indicating that model retraining happened multiple times with different configurations.
 - **`compile=False`**: Model is loaded without recompiling the optimizer. This is correct for inference-only usage and avoids warnings about missing optimizer state.
 
 ---
 
-### File: `textemotion_tf212.py` (Complete Source — 183 lines)
+### File: `phase04_text_negation_engine.py` (Complete Source — 183 lines)
 
 ```python
 # ===================================
@@ -492,20 +492,20 @@ while True:
 **Paragraph Voting System (Lines 145-180)**
 - `vote_counter`: Counts how many sentences predict each emotion. The paragraph's final emotion is the mode (most frequent vote).
 - `prob_accumulator`: Sums raw probabilities across sentences, then averages them.
-- This dual voting+averaging approach survives conceptually into Phase 9's `main_text.py` (probability accumulation + final emotion selection).
+- This dual voting+averaging approach survives conceptually into Phase 9's `phase08_text_api_preprod.py` (probability accumulation + final emotion selection).
 
 ---
 
-### File: `BiLSTM 1.py` & `BiLSTM app.py` (The API Bridge)
+### File: `phase04_text_bilstm_attention_v1.py` & `phase04_text_api_bilstm_keyword.py` (The API Bridge)
 
 These two scripts form the final evolution of Phase 4 before the unified APIs.
 
-**`BiLSTM 1.py`**:
+**`phase04_text_bilstm_attention_v1.py`**:
 - **Role**: Desktop text predictor with the mature `AttentionLayer` (`K.tanh`/`K.dot` ops).
-- **Evolution**: Shows `AttentionLayer` migrating from `tf.tensordot` (in `textemotion.py`) to the Bahdanau-style `K.tanh(K.dot(x, W) + b)` used in Phase 7.
-- **Voting**: Uses Python's `collections.Counter` for majority voting, simpler than the manual dictionary in `textemotion_tf212.py`.
+- **Evolution**: Shows `AttentionLayer` migrating from `tf.tensordot` (in `phase04_text_attention_tester.py`) to the Bahdanau-style `K.tanh(K.dot(x, W) + b)` used in Phase 7.
+- **Voting**: Uses Python's `collections.Counter` for majority voting, simpler than the manual dictionary in `phase04_text_negation_engine.py`.
 
-**`BiLSTM app.py`**:
+**`phase04_text_api_bilstm_keyword.py`**:
 - **Role**: The **first text emotion FastAPI endpoint** (Port 8001). The missing link between Phase 4 desktop scripts and Phase 7 distributed APIs.
 - **Key Innovation**: Replaces `is_context_clear()` with a massive `rawemotionwords` list (150+ keywords). The `sentence_has_emotion()` function requires at least one keyword match before running the model.
 - **Why abandoned**: Phase 9's dual-threshold confidence filter proved far superior to relying on hardcoded vocabulary arrays.
@@ -514,7 +514,7 @@ These two scripts form the final evolution of Phase 4 before the unified APIs.
 
 ## Header 3: Micro-Decision Log
 
-| Decision | `textemo.py` | `textcalemo.py` | `textemotion.py` | `textemotion_tf212.py` | Phase 9 (`main_text.py`) |
+| Decision | `phase04_text_bilstm_trainer.py` | `phase04_text_cnn_predictor.py` | `phase04_text_attention_tester.py` | `phase04_text_negation_engine.py` | Phase 9 (`phase08_text_api_preprod.py`) |
 |---|---|---|---|---|---|
 | Architecture | BiLSTM | CNN | BiLSTM+Attention | BiLSTM (model loaded) | BiLSTM+Attention |
 | `max_len` | 50 | 100 | 60 | 50 | 100 |
@@ -534,13 +534,13 @@ These two scripts form the final evolution of Phase 4 before the unified APIs.
 
 | Phase 4 Artifact | Where it migrated | What replaced it |
 |---|---|---|
-| `textemo.py` (trainer) | → Kaggle notebook (`Model notebooks.txt` lines 1-800) | Retrained with Attention, class weights, `max_len=100` |
-| `textcalemo.py` (CNN predictor) | → Abandoned | CNN architecture was not pursued; BiLSTM+Attention won |
-| `textemotion.py` `AttentionLayer` | → `2nd attempt Text.txt` → `main_text.py` | Evolved from `tf.tensordot` → `K.tanh/K.dot` → `ops.tanh/ops.matmul` |
-| `textemotion.py` `PorterStemmer` | → Abandoned | Never used; removed silently |
-| `textemotion.py` `glob.glob()` discovery | → Replaced by explicit paths | All Phase 7+ scripts use hardcoded model paths |
-| `textemotion_tf212.py` `is_context_clear()` | → Removed entirely in Phase 9 | Replaced by dual-threshold confidence filter |
-| `textemotion_tf212.py` `NEGATION_MAP` | → Removed entirely in Phase 9 | Model handles negation natively |
-| `textemotion_tf212.py` `rewrite_sentence()` | → Removed entirely in Phase 9 | Model handles negation natively |
-| `textemotion_tf212.py` vote counter | → `main_text.py` accumulator logic | Preserved conceptually |
-| `emotion_api/testtext.py` | → Byte-identical copy; co-located for Phase 6 monolith | Replaced by `main_text.py` endpoint |
+| `phase04_text_bilstm_trainer.py` (trainer) | → Kaggle notebook (`training_models_notebook_dump.txt` lines 1-800) | Retrained with Attention, class weights, `max_len=100` |
+| `phase04_text_cnn_predictor.py` (CNN predictor) | → Abandoned | CNN architecture was not pursued; BiLSTM+Attention won |
+| `phase04_text_attention_tester.py` `AttentionLayer` | → `phase07_text_api_standalone.txt` → `phase08_text_api_preprod.py` | Evolved from `tf.tensordot` → `K.tanh/K.dot` → `ops.tanh/ops.matmul` |
+| `phase04_text_attention_tester.py` `PorterStemmer` | → Abandoned | Never used; removed silently |
+| `phase04_text_attention_tester.py` `glob.glob()` discovery | → Replaced by explicit paths | All Phase 7+ scripts use hardcoded model paths |
+| `phase04_text_negation_engine.py` `is_context_clear()` | → Removed entirely in Phase 9 | Replaced by dual-threshold confidence filter |
+| `phase04_text_negation_engine.py` `NEGATION_MAP` | → Removed entirely in Phase 9 | Model handles negation natively |
+| `phase04_text_negation_engine.py` `rewrite_sentence()` | → Removed entirely in Phase 9 | Model handles negation natively |
+| `phase04_text_negation_engine.py` vote counter | → `phase08_text_api_preprod.py` accumulator logic | Preserved conceptually |
+| `phase04_text_negation_engine_copy.py` | → Byte-identical copy; co-located for Phase 6 monolith | Replaced by `phase08_text_api_preprod.py` endpoint |

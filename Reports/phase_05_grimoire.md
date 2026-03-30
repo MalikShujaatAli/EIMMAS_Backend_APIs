@@ -6,14 +6,14 @@
 
 | File | Size (bytes) | Role |
 |---|---|---|
-| `FYP old/6.py` | 247 | H5 → SavedModel → ONNX conversion attempt |
-| `FYP old/7.py` | 782 | TFLite → TF concrete function attempt |
+| `FYP old/phase05_convert_onnx_attempt.py` | 247 | H5 → SavedModel → ONNX conversion attempt |
+| `FYP old/phase05_convert_tflite_attempt.py` | 782 | TFLite → TF concrete function attempt |
 
 ---
 
 ## Header 2: Line-by-Line Logic Migration
 
-### File: `6.py` (Complete Source)
+### File: `phase05_convert_onnx_attempt.py` (Complete Source)
 
 ```python
 
@@ -34,7 +34,7 @@ model.save("saved_model")
 - **No error handling, no path checking, no output verification.**
 - **Phase 9 resolution**: ONNX was never pursued. The successful lightweight format conversion uses TFLite (`convert_audio_model.py`), not ONNX.
 
-### File: `7.py` (Complete Source)
+### File: `phase05_convert_tflite_attempt.py` (Complete Source)
 
 ```python
 import tensorflow as tf
@@ -97,9 +97,9 @@ def model_func(x):
 
 | Phase 5 Artifact | Descendant |
 |---|---|
-| `6.py` | No descendant. ONNX path fully abandoned. |
-| `7.py` `representative_dataset()` | Conceptual descendant: `convert_audio_model.py`'s quantization settings |
-| `7.py` `@tf.function` wrapping | Correct usage appears in Phase 9: `@tf.function(reduce_retracing=True)` wrapping of `emotion_model(tensor, training=False)` (NOT the interpreter) |
+| `phase05_convert_onnx_attempt.py` | No descendant. ONNX path fully abandoned. |
+| `phase05_convert_tflite_attempt.py` `representative_dataset()` | Conceptual descendant: `convert_audio_model.py`'s quantization settings |
+| `phase05_convert_tflite_attempt.py` `@tf.function` wrapping | Correct usage appears in Phase 9: `@tf.function(reduce_retracing=True)` wrapping of `emotion_model(tensor, training=False)` (NOT the interpreter) |
 | `emotion_model.tflite` (48×48 face) | Replaced by `audio_model.tflite` (audio BiLSTM) — face model stays in `.keras` format and uses `@tf.function` instead of TFLite |
 
 **Key insight**: Phase 5 attempted the wrong conversions in the wrong directions. The eventual Phase 9 solution was:

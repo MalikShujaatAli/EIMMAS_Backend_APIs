@@ -6,15 +6,15 @@
 
 | File | Size (bytes) | Role |
 |---|---|---|
-| `FYP old/2nd attempt Audio.txt` | 7,678 | Standalone Audio API |
-| `FYP old/2nd attempt Video.txt` | 8,737 | Standalone Image+Video API |
-| `FYP old/2nd attempt Text.txt` | 6,038 | Standalone Text API |
+| `FYP old/phase07_audio_api_standalone.txt` | 7,678 | Standalone Audio API |
+| `FYP old/phase07_vision_api_standalone.txt` | 8,737 | Standalone Image+Video API |
+| `FYP old/phase07_text_api_standalone.txt` | 6,038 | Standalone Text API |
 
 ---
 
 ## Header 2: Line-by-Line Logic Migration
 
-### File: `2nd attempt Audio.txt` — Key Diff from Phase 6
+### File: `phase07_audio_api_standalone.txt` — Key Diff from Phase 6
 
 The full source (202 lines) is preserved in this project. Below are the critical blocks that changed from Phase 6.
 
@@ -75,7 +75,7 @@ prediction = model.predict(tensor, verbose=0)[0]
 
 ---
 
-### File: `2nd attempt Video.txt` — Key Diff from Phase 6
+### File: `phase07_vision_api_standalone.txt` — Key Diff from Phase 6
 
 #### New: MediaPipe Face Detection (Lines 65-66)
 ```python
@@ -126,7 +126,7 @@ _, _, probs = predict_face_emotion(face_roi)
 
 ---
 
-### File: `2nd attempt Text.txt` — Key Diff from Phase 4
+### File: `phase07_text_api_standalone.txt` — Key Diff from Phase 4
 
 #### New: `AttentionLayer` with Keras Serialization (Lines 34-54)
 ```python
@@ -142,10 +142,10 @@ class AttentionLayer(Layer):
         output = x * a
         return K.sum(output, axis=1)
 ```
-- **`@tf.keras.utils.register_keras_serializable()`**: Enables the layer to be saved/loaded with `model.save()` / `load_model()` without manual `custom_objects` registration. This was missing in `textemotion.py`.
-- **Weight shape change**: From `(dim,)` in `textemotion.py` to `(input_shape[-1], 1)` — a column vector. This changes the attention from a dot product with a 1D vector to a matrix multiplication yielding scalar scores.
-- **`initializer="normal"`**: Changed from `glorot_uniform` in `textemotion.py`. Normal initialization has higher variance, leading to more diverse initial attention scores.
-- **`K.tanh(K.dot(x, self.W) + self.b)`**: Bahdanau-style additive attention with tanh activation. Replaces `textemotion.py`'s `tf.tensordot` approach.
+- **`@tf.keras.utils.register_keras_serializable()`**: Enables the layer to be saved/loaded with `model.save()` / `load_model()` without manual `custom_objects` registration. This was missing in `phase04_text_attention_tester.py`.
+- **Weight shape change**: From `(dim,)` in `phase04_text_attention_tester.py` to `(input_shape[-1], 1)` — a column vector. This changes the attention from a dot product with a 1D vector to a matrix multiplication yielding scalar scores.
+- **`initializer="normal"`**: Changed from `glorot_uniform` in `phase04_text_attention_tester.py`. Normal initialization has higher variance, leading to more diverse initial attention scores.
+- **`K.tanh(K.dot(x, self.W) + self.b)`**: Bahdanau-style additive attention with tanh activation. Replaces `phase04_text_attention_tester.py`'s `tf.tensordot` approach.
 - **Phase 9 evolution**: `K.tanh` → `keras.ops.tanh`, `K.dot` → `ops.matmul`, `K.softmax` → `ops.softmax`, `K.sum` → `ops.sum`. The Keras 2 backend ops (`K.*`) were deprecated in Keras 3.
 
 #### New: Batch Inference (Lines 99-103)
@@ -154,7 +154,7 @@ sequences = tokenizer.texts_to_sequences(sentences)
 padded_batch = pad_sequences(sequences, maxlen=MAX_LEN, padding="post", truncating="post")
 predictions = model.predict(padded_batch, verbose=0)
 ```
-- **First appearance of batch prediction for text**: All sentences are tokenized together, padded into a single matrix, and predicted in one `model.predict()` call. This eliminates the per-sentence prediction loop from `textemotion_tf212.py`.
+- **First appearance of batch prediction for text**: All sentences are tokenized together, padded into a single matrix, and predicted in one `model.predict()` call. This eliminates the per-sentence prediction loop from `phase04_text_negation_engine.py`.
 - **Still uses `model.predict()`**: Not `@tf.function` compiled. Not offloaded with `asyncio.to_thread`.
 
 #### Persistent Flaw: NLTK Download at Startup (Line 18)
@@ -182,7 +182,7 @@ nltk.download('punkt', quiet=True)
 | Text negation | `rewrite_sentence()` (Phase 4) | Removed | Removed |
 | Text context filter | `is_context_clear()` (Phase 4) | Removed | Removed (dual-threshold instead) |
 | NLTK download | N/A | `nltk.download()` at startup | `setup_nltk.py` (offline) |
-| Attention ops | N/A (`textemo.py` had no attention) | `K.tanh`/`K.dot`/`K.softmax` | `ops.tanh`/`ops.matmul`/`ops.softmax` |
+| Attention ops | N/A (`phase04_text_bilstm_trainer.py` had no attention) | `K.tanh`/`K.dot`/`K.softmax` | `ops.tanh`/`ops.matmul`/`ops.softmax` |
 | CORS | Not configured | CORSMiddleware (audio only) | CORSMiddleware (all services) |
 | Video decimation | Every 10th frame | Every 10th frame (unchanged!) | FPS-aware (1 frame/sec) |
 | Async offloading | None | None (still blocking!) | `asyncio.to_thread()` everywhere |

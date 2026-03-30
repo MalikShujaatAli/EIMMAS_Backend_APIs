@@ -4,7 +4,7 @@
 The primary aim of Phase 8 was to refactor the separated, flawed APIs of Phase 7 into stable, deployable microservices before introducing the complexities of a central orchestrator. The goal was to eliminate catastrophic latency bottlenecks (specifically in video processing) and remove hard disk I/O dependency for media files.
 
 ## Architectural State
-- **Decoupled Pre-Production**: Three independent FastAPI applications (`main_audio.py`, `main_video.py`, `main_text.py` from `FYP old/`) running on separate ports (8000, 8002, 8001).
+- **Decoupled Pre-Production**: Three independent FastAPI applications (`phase08_audio_api_preprod.py`, `phase08_vision_api_preprod.py`, `phase08_text_api_preprod.py` from `FYP old/`) running on separate ports (8000, 8002, 8001).
 - **No Orchestration**: External clients (or testing scripts) had to communicate with each API directly. No centralized fusion, authentication, or LLM chat existed.
 - **In-Memory Transformation**: Audio processing successfully shifted from `NamedTemporaryFile` disk writes to `io.BytesIO` streams, marking the first time the system achieved "zero-disk" operation for a modality.
 
@@ -17,4 +17,4 @@ The primary aim of Phase 8 was to refactor the separated, flawed APIs of Phase 7
 While the individual microservices were technically functional, they were structurally incomplete for a final product. The video service still lacked batched processing (analyzing frame-by-frame instead of as a tensor stack), and none of the APIs utilized asynchronous thread offloading (`asyncio.to_thread`), meaning heavy ML inference could still block the FastAPI event loop under concurrent load. Furthermore, a multimodal system inherently requires a fusion layer to combine the signals into a unified psychological profile—necessitating the creation of Phase 9's master orchestrator.
 
 ## Legacy Impact
-Phase 8 represents the "dress rehearsal" for production. The specific file forms created here (`main_audio.py`, `main_video.py`, `main_text.py`) survived almost intact into the final `services/` directory, requiring only the final performance optimizations (`@tf.function` and thread pooling) to achieve enterprise-grade stability.
+Phase 8 represents the "dress rehearsal" for production. The specific file forms created here (`phase08_audio_api_preprod.py`, `phase08_vision_api_preprod.py`, `phase08_text_api_preprod.py`) survived almost intact into the final `services/` directory, requiring only the final performance optimizations (`@tf.function` and thread pooling) to achieve enterprise-grade stability.

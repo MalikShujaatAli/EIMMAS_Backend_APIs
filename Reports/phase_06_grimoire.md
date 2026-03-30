@@ -6,11 +6,11 @@
 
 | File | Size (bytes) | Role |
 |---|---|---|
-| `FYP old/emotion_api/main.py` | 7,322 | Unified FastAPI: face + voice endpoints |
-| `FYP old/old endpoints.txt` | ~4,209 | Variant unified API with different model refs |
-| `FYP old/old video.txt` | ~4,209 | Variant image API with PyInstaller CPU-only binding |
-| `FYP old/myappworking.py` | 8,432 | Variant monolith with PyInstaller prep (`sys._MEIPASS`) |
-| `FYP old/emotion_api.spec` | 930 | PyInstaller bundling specification |
+| `FYP old/phase06_fusion_api_monolith.py` | 7,322 | Unified FastAPI: face + voice endpoints |
+| `FYP old/phase06_fusion_api_old_endpoints.txt` | ~4,209 | Variant unified API with different model refs |
+| `FYP old/phase06_vision_api_pyinstaller_variant.txt` | ~4,209 | Variant image API with PyInstaller CPU-only binding |
+| `FYP old/phase06_fusion_api_json_variant.py` | 8,432 | Variant monolith with PyInstaller prep (`sys._MEIPASS`) |
+| `FYP old/phase06_fusion_api_pyinstaller_spec.spec` | 930 | PyInstaller bundling specification |
 | `FYP old/emotion_api/face_emotion_model.h5` | 7,475,760 | Phase 1 CNN (48×48) model weights |
 | `FYP old/emotion_api/final_lstm_model_tf212.h5` | 1,756,512 | Voice LSTM TF2.12 compatible |
 | `FYP old/emotion_api/final_lstm_model.h5` | 5,201,456 | Original voice LSTM (pre-TF2.12 fix) |
@@ -21,7 +21,7 @@
 
 ## Header 2: Line-by-Line Logic Migration
 
-### File: `emotion_api/main.py` (Complete Source)
+### File: `phase06_fusion_api_monolith.py` (Complete Source)
 
 ```python
 from fastapi import FastAPI, UploadFile, File
@@ -279,14 +279,14 @@ if __name__ == "__main__":
 
 #### Block 4: Voice Sample Rate Bug (Line 215)
 - **`librosa.load(audio_stream, sr=22050)`**: Forces the audio to 22050 Hz. But the voice model (`final_lstm_model_tf212.h5` and its successor `audio_best_model.keras`) was trained on 16000 Hz audio. This sample rate mismatch means the MFCC extraction produces features at the wrong time resolution — the model sees frequency patterns it was never trained on. This causes unpredictable misclassification.
-- **Phase 7 fix**: `2nd attempt Audio.txt` corrects this to `librosa.load(file_path, sr=SAMPLE_RATE)` with `SAMPLE_RATE = 16000`.
+- **Phase 7 fix**: `phase07_audio_api_standalone.txt` corrects this to `librosa.load(file_path, sr=SAMPLE_RATE)` with `SAMPLE_RATE = 16000`.
 
 #### Block 5: Video Endpoint — Every-10th-Frame (Lines 157-202)
 - **`if frame_id % 10 != 0: continue`**: Processes every 10th frame regardless of the video's FPS. For a 30fps video, this means 3 frames/second. For a 60fps video, 6 frames/second. For a 15fps video, 1.5 frames/second. The sampling rate is inconsistent across different video formats.
 - **CPU waste**: Even though skipped frames aren't processed, `cap.read()` still decodes every frame. The CPU decompresses all frames, then throws away 90% of them.
 - **`max(faces, key=lambda f: f[2] * f[3])`**: Selects the largest detected face by area (width × height). This is a reasonable heuristic — the largest face is likely the primary subject.
 - **Per-frame `predict_face_emotion()`**: Each processed frame triggers a separate `model.predict()` call. No batch accumulation.
-- **Phase 9 resolution**: `main_video.py` uses `frame_mod = max(1, int(fps))` for FPS-aware decimation (exactly 1 frame/second), accumulates face tensors into a list, then batch-predicts with `compute_vision_inference(np.stack(face_tensors))`.
+- **Phase 9 resolution**: `phase08_vision_api_preprod.py` uses `frame_mod = max(1, int(fps))` for FPS-aware decimation (exactly 1 frame/second), accumulates face tensors into a list, then batch-predicts with `compute_vision_inference(np.stack(face_tensors))`.
 
 #### Block 6: Probability Scaling (Lines 70, 106)
 - **Face: `raw * 0.55`**: Reduces all face probabilities by 45%.
@@ -294,9 +294,9 @@ if __name__ == "__main__":
 - **Different scaling factors for different models**: No documented rationale. These were likely tuned empirically during demos to make confidence scores "feel right" to the developer.
 - **Phase 9 resolution**: All arbitrary scaling removed. Raw softmax probabilities are returned. Phase 9's text model applies `predictions ** 1.5` (power sharpening) which is mathematically principled — it increases the gap between the top and second predictions, making the model's "opinion" stronger.
 
-#### Block 7: PyInstaller Spec (`emotion_api.spec`) & Variant Monoliths (`myappworking.py` / `old video.txt`)
+#### Block 7: PyInstaller Spec (`phase06_fusion_api_pyinstaller_spec.spec`) & Variant Monoliths (`phase06_fusion_api_json_variant.py` / `phase06_vision_api_pyinstaller_variant.txt`)
 
-In `myappworking.py` and `old video.txt`, we see explicit runtime code supporting the `.spec` file:
+In `phase06_fusion_api_json_variant.py` and `phase06_vision_api_pyinstaller_variant.txt`, we see explicit runtime code supporting the `.spec` file:
 
 ```python
 if getattr(sys, 'frozen', False):
@@ -310,11 +310,11 @@ cascade_path = os.path.join(application_path, "haarcascade_frontalface_default.x
 ```
 
 - **`sys._MEIPASS`**: This is PyInstaller's temporary unpacking directory. When a user runs the `.exe`, PyInstaller extracts `haarcascade_frontalface_default.xml` and the `.h5` files here. These scripts were modified to load assets from this dynamic path instead of the current working directory.
-- **CPU Binding**: `old video.txt` explicitly used `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` and `os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"` to force CPU execution, likely because bundling CUDA native libraries via PyInstaller was failing.
-- **`emotion_api.spec`**: 
+- **CPU Binding**: `phase06_vision_api_pyinstaller_variant.txt` explicitly used `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` and `os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"` to force CPU execution, likely because bundling CUDA native libraries via PyInstaller was failing.
+- **`phase06_fusion_api_pyinstaller_spec.spec`**: 
 ```python
 a = Analysis(
-    ['main.py'],
+    ['phase06_fusion_api_monolith.py'],
     pathex=[],
     binaries=[],
     datas=[
@@ -371,17 +371,17 @@ exe = EXE(
 
 | Phase 6 Artifact | Immediate Descendant (Phase 7) | Phase 9 Descendant |
 |---|---|---|
-| `emotion_api/main.py` `/predict/image` | `2nd attempt Video.txt` `/predict/image` | `main_video.py` `/predict/image` |
-| `emotion_api/main.py` `/predict/video` | `2nd attempt Video.txt` `/predict/video` | `main_video.py` `/predict/video` |
-| `emotion_api/main.py` `/predict/voice` | `2nd attempt Audio.txt` `/predict_audio` | `main_audio.py` `/predict_audio` |
-| No text endpoint | `2nd attempt Text.txt` `/predict_text` | `main_text.py` `/predict_text` |
+| `phase06_fusion_api_monolith.py` `/predict/image` | `phase07_vision_api_standalone.txt` `/predict/image` | `phase08_vision_api_preprod.py` `/predict/image` |
+| `phase06_fusion_api_monolith.py` `/predict/video` | `phase07_vision_api_standalone.txt` `/predict/video` | `phase08_vision_api_preprod.py` `/predict/video` |
+| `phase06_fusion_api_monolith.py` `/predict/voice` | `phase07_audio_api_standalone.txt` `/predict_audio` | `phase08_audio_api_preprod.py` `/predict_audio` |
+| No text endpoint | `phase07_text_api_standalone.txt` `/predict_text` | `phase08_text_api_preprod.py` `/predict_text` |
 | No orchestrator | None | `orchestrator_v3.py` (fusion, LLM, auth, DB) |
-| `emotion_api.spec` (PyInstaller) | Abandoned | `start_servers.bat` (proper deployment) |
+| `phase06_fusion_api_pyinstaller_spec.spec` (PyInstaller) | Abandoned | `start_servers.bat` (proper deployment) |
 | `merged_voice_label()` | Removed (7-class model) | `INT_TO_EMOTION` dict |
 | `extract_audio_features()` with deltas | `process_audio()` (MFCC only) | `get_features_fast()` (MFCC + Z-score) |
 
 ### Files that disappeared
-- `emotion_api.spec`: PyInstaller approach abandoned entirely.
+- `phase06_fusion_api_pyinstaller_spec.spec`: PyInstaller approach abandoned entirely.
 - `emotion_api/final_lstm_model.h5`: Pre-TF2.12 model, replaced by TF2.12-compatible version.
 - `emotion_api/voice_model_tf212_FIXED.h5`: Another iteration of the voice model fix, superseded.
-- `JSONResponse` import: Imported but never used in `main.py`. Dead import removed in Phase 7.
+- `JSONResponse` import: Imported but never used in `phase06_fusion_api_monolith.py`. Dead import removed in Phase 7.

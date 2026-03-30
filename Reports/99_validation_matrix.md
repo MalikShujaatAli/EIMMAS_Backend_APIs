@@ -8,24 +8,24 @@ This document traces the complete lineage of every function, class, configuratio
 
 | Entity | Born | Mutated | Died | Resurrected | Final Form (Phase 9) |
 |---|---|---|---|---|---|
-| `preprocess_face()` | P3 (`3.py`) | P6 (axis shorthand), P7 (CLAHE+112×112+CUBIC) | — | — | `main_video.py:preprocess_face()` |
-| `predict_face_emotion()` | P3 (`3.py`) | P6 (×0.55 scaling), P7 (scaling removed) | — | — | Inlined into batch prediction loop |
-| `get_emotion_scores()` | P3 (`3.py`) | — | P6 (renamed to `predict_face_emotion`) | — | — |
-| `extract_features()` (audio) | P2 (`v4.py`) | P3 (added `.T` transpose), P6 (added delta stacking → renamed `extract_audio_features`) | P7 (renamed `process_audio`, deltas removed) | — | `main_audio.py:get_features_fast()` |
-| `predict_emotion()` (audio) | P3 (`v5.py`) | P3/`v6.py` (added sorted confidence printout) | P6 (renamed `predict_voice_emotion`) | — | TFLite `_predict_tflite()` |
-| `heartbeat_bar()` | P3 (`v5.py`) | P3/`v6.py` (identical) | P6 (no terminal UI in API) | Never | — |
-| `merged_voice_label()` | P6 (`emotion_api/main.py`) | — | P7 (7-class model, merge at training time) | Never | — |
-| `AttentionLayer` | P4 (`textemotion.py`) | P4/`textemotion_tf212.py` (identical copy), P7 (`K.tanh`/`K.dot`, shape change) | — | — | `main_text.py` (`ops.tanh`/`ops.matmul`, Keras 3) |
-| `is_context_clear()` | P4 (`textemotion_tf212.py`) | — | P4 (`BiLSTM app.py`, replaced by `sentence_has_emotion`) | Never | — |
-| `rewrite_sentence()` | P4 (`textemotion_tf212.py`) | — | P7 (removed entirely) | Never | — |
-| `NEGATION_MAP` | P4 (`textemotion_tf212.py`) | — | P7 (removed entirely) | Never | — |
-| `sentence_has_emotion()` | P4 (`BiLSTM app.py`) | — | P7 (removed entirely) | Never | — |
-| `rawemotionwords` list | P4 (`BiLSTM app.py`) | — | P7 (removed entirely) | Never | — |
-| `predict_emotion()` (text) | P4 (`textemotion_tf212.py`) | P4/`textcalemo.py` (CNN version) | — | — | `compute_inference()` `@tf.function` |
-| `predict()` (text simple) | P4 (`textemotion.py`) | P4 (`BiLSTM 1.py`, batch support) | P4/`textemotion_tf212.py` (expanded version) | — | — |
-| `extract_largest_face()` | P7 (`2nd attempt Video.txt`) | — | — | — | Inlined with MediaPipe Tasks API |
-| `compute_vision_inference()` | P8 (`main_video.py`) | — | — | — | Current (born in P8) |
-| `compute_inference()` (text) | P8 (`main_text.py`) | — | — | — | Current (born in P8) |
+| `preprocess_face()` | P3 (`phase03_vision_webcam_scaled.py`) | P6 (axis shorthand), P7 (CLAHE+112×112+CUBIC) | — | — | `phase08_vision_api_preprod.py:preprocess_face()` |
+| `predict_face_emotion()` | P3 (`phase03_vision_webcam_scaled.py`) | P6 (×0.55 scaling), P7 (scaling removed) | — | — | Inlined into batch prediction loop |
+| `get_emotion_scores()` | P3 (`phase03_vision_webcam_scaled.py`) | — | P6 (renamed to `predict_face_emotion`) | — | — |
+| `extract_features()` (audio) | P2 (`phase02_audio_lstm_trainer.py`) | P3 (added `.T` transpose), P6 (added delta stacking → renamed `extract_audio_features`) | P7 (renamed `process_audio`, deltas removed) | — | `phase08_audio_api_preprod.py:get_features_fast()` |
+| `predict_emotion()` (audio) | P3 (`phase03_audio_live_vosk.py`) | P3/`phase03_audio_push_to_talk.py` (added sorted confidence printout) | P6 (renamed `predict_voice_emotion`) | — | TFLite `_predict_tflite()` |
+| `heartbeat_bar()` | P3 (`phase03_audio_live_vosk.py`) | P3/`phase03_audio_push_to_talk.py` (identical) | P6 (no terminal UI in API) | Never | — |
+| `merged_voice_label()` | P6 (`phase06_fusion_api_monolith.py`) | — | P7 (7-class model, merge at training time) | Never | — |
+| `AttentionLayer` | P4 (`phase04_text_attention_tester.py`) | P4/`phase04_text_negation_engine.py` (identical copy), P7 (`K.tanh`/`K.dot`, shape change) | — | — | `phase08_text_api_preprod.py` (`ops.tanh`/`ops.matmul`, Keras 3) |
+| `is_context_clear()` | P4 (`phase04_text_negation_engine.py`) | — | P4 (`phase04_text_api_bilstm_keyword.py`, replaced by `sentence_has_emotion`) | Never | — |
+| `rewrite_sentence()` | P4 (`phase04_text_negation_engine.py`) | — | P7 (removed entirely) | Never | — |
+| `NEGATION_MAP` | P4 (`phase04_text_negation_engine.py`) | — | P7 (removed entirely) | Never | — |
+| `sentence_has_emotion()` | P4 (`phase04_text_api_bilstm_keyword.py`) | — | P7 (removed entirely) | Never | — |
+| `rawemotionwords` list | P4 (`phase04_text_api_bilstm_keyword.py`) | — | P7 (removed entirely) | Never | — |
+| `predict_emotion()` (text) | P4 (`phase04_text_negation_engine.py`) | P4/`phase04_text_cnn_predictor.py` (CNN version) | — | — | `compute_inference()` `@tf.function` |
+| `predict()` (text simple) | P4 (`phase04_text_attention_tester.py`) | P4 (`phase04_text_bilstm_attention_v1.py`, batch support) | P4/`phase04_text_negation_engine.py` (expanded version) | — | — |
+| `extract_largest_face()` | P7 (`phase07_vision_api_standalone.txt`) | — | — | — | Inlined with MediaPipe Tasks API |
+| `compute_vision_inference()` | P8 (`phase08_vision_api_preprod.py`) | — | — | — | Current (born in P8) |
+| `compute_inference()` (text) | P8 (`phase08_text_api_preprod.py`) | — | — | — | Current (born in P8) |
 | `fuse_emotions()` | P9 (`orchestrator_v3.py`) | — | — | — | Current (born in P9) |
 | `_extract_audio_from_video()` | P9 (`orchestrator_v3.py`) | — | — | — | Current (born in P9) |
 
@@ -55,19 +55,19 @@ This document traces the complete lineage of every function, class, configuratio
 | Pattern | Born | Died | Replacement |
 |---|---|---|---|
 | Hardware-locked desktop app | P3 (`sounddevice`, `keyboard`, `cv2.VideoCapture(0)`) | P6 (FastAPI transition) | HTTP `UploadFile` |
-| Monolithic multi-model process | P6 (`emotion_api/main.py`, `myappworking.py`) | P7 (service separation) | 4 independent microservices |
-| PyInstaller `.exe` bundling | P6 (`emotion_api.spec`, `myappworking.py`, `old video.txt`) | P6 (abandoned) | `start_servers.bat` multi-worker |
-| Haar Cascade face detection | P3 (`3.py`, `realtimedetection.py`) | P7 (MediaPipe) | MediaPipe Tasks Vision API |
-| `pd.get_dummies()` one-hot labels | P2 (`v4.py`) | P2 (training only) | `INT_TO_EMOTION` dict + sparse categorical |
-| MFCC delta/delta2 stacking | P6 (`emotion_api/main.py`) | P7 (MFCC only) | MFCC only (BiLSTM captures dynamics) |
-| Manual negation dictionary | P4 (`textemotion_tf212.py`) | P7 (removed) | Model handles negation natively |
-| Keyword-based context filter | P4 (`textemotion_tf212.py`) | P7 (removed) | Dual-threshold confidence filter |
-| Vosk offline speech recognition | P3 (`v5.py`, `v6.py`) | P6 (no transcription) | Groq Whisper API (P9 orchestrator) |
+| Monolithic multi-model process | P6 (`phase06_fusion_api_monolith.py`, `phase06_fusion_api_json_variant.py`) | P7 (service separation) | 4 independent microservices |
+| PyInstaller `.exe` bundling | P6 (`phase06_fusion_api_pyinstaller_spec.spec`, `phase06_fusion_api_json_variant.py`, `phase06_vision_api_pyinstaller_variant.txt`) | P6 (abandoned) | `start_servers.bat` multi-worker |
+| Haar Cascade face detection | P3 (`phase03_vision_webcam_scaled.py`, `phase03_vision_webcam_early.py`) | P7 (MediaPipe) | MediaPipe Tasks Vision API |
+| `pd.get_dummies()` one-hot labels | P2 (`phase02_audio_lstm_trainer.py`) | P2 (training only) | `INT_TO_EMOTION` dict + sparse categorical |
+| MFCC delta/delta2 stacking | P6 (`phase06_fusion_api_monolith.py`) | P7 (MFCC only) | MFCC only (BiLSTM captures dynamics) |
+| Manual negation dictionary | P4 (`phase04_text_negation_engine.py`) | P7 (removed) | Model handles negation natively |
+| Keyword-based context filter | P4 (`phase04_text_negation_engine.py`) | P7 (removed) | Dual-threshold confidence filter |
+| Vosk offline speech recognition | P3 (`phase03_audio_live_vosk.py`, `phase03_audio_push_to_talk.py`) | P6 (no transcription) | Groq Whisper API (P9 orchestrator) |
 | `model.predict()` eager execution | P3 (all scripts) | P8 | `@tf.function` compiled graph |
 | Per-item prediction loops | P3-P7 (video frames, text sentences) | P8 | Batch tensor stacking |
 | Disk-based audio processing | P6 (`NamedTemporaryFile`) | P8 | `soundfile.read(BytesIO())` + FFmpeg RAM pipes |
-| `nltk.download()` at runtime | P7 (`2nd attempt Text.txt`) | P9 | `setup_nltk.py` offline pre-download |
-| Arbitrary probability scaling (×0.55, ×0.66) | P3 (`3.py`), P6 (`emotion_api/main.py`) | P8 | Raw softmax + power sharpening (×1.5) |
+| `nltk.download()` at runtime | P7 (`phase07_text_api_standalone.txt`) | P9 | `setup_nltk.py` offline pre-download |
+| Arbitrary probability scaling (×0.55, ×0.66) | P3 (`phase03_vision_webcam_scaled.py`), P6 (`phase06_fusion_api_monolith.py`) | P8 | Raw softmax + power sharpening (×1.5) |
 
 ---
 
@@ -75,19 +75,19 @@ This document traces the complete lineage of every function, class, configuratio
 
 | Orphaned Entity | Last Seen | Explanation |
 |---|---|---|
-| `PorterStemmer` import | P4 (`textemotion.py`) | Imported, assigned to `stemmer`, never called. Stemming was considered but abandoned because the tokenizer was trained on unstemmed text. |
-| `heartbeat_bar()` | P3 (`v5.py`, `v6.py`) | Terminal-only volume visualization. No equivalent exists in HTTP APIs — there is no terminal to draw bars in. |
-| `keyboard` library | P3 (`v6.py`) | Push-to-talk control. Replaced by Flutter's native microphone capture, not by any server-side equivalent. |
-| `sounddevice` library | P3 (`v5.py`, `v6.py`) | Hardware microphone capture. Replaced by HTTP file upload, not by any server-side equivalent. |
-| `vosk` library | P3 (`v5.py`, `v6.py`) | Offline speech-to-text. Replaced by Groq Whisper in the orchestrator, but the usage patterns are completely different (offline streaming vs. cloud batch). |
-| `DURATION = 5` variable | P3 (`v5.py`) | Defined but never referenced. Evidence of an abandoned fixed-duration recording mode. |
-| ANSI color `COLOR` dict | P3 (`v6.py`) | Terminal color coding per emotion. No equivalent in JSON APIs. |
-| `JSONResponse` import | P6 (`emotion_api/main.py`) | Imported but never used. FastAPI auto-converts dicts to JSON. |
-| `word_tokenize` import | P4 (`textemotion.py`) | Imported from NLTK but never called. Only `sent_tokenize` was used. |
-| `time` import | P3 (`v5.py`) | Imported but never called. Likely intended for timing measurements. |
-| `representative_dataset()` | P5 (`7.py`) | TFLite calibration generator defined but never called. |
-| `model_func()` | P5 (`7.py`) | Invalid `@tf.function` wrapping of `interpreter.invoke()`. Never executed. |
-| `cv2.putText` emotion overlay | P3 (`realtimedetection.py`) | Direct window overlay abandoned when moving to headless APIs. |
+| `PorterStemmer` import | P4 (`phase04_text_attention_tester.py`) | Imported, assigned to `stemmer`, never called. Stemming was considered but abandoned because the tokenizer was trained on unstemmed text. |
+| `heartbeat_bar()` | P3 (`phase03_audio_live_vosk.py`, `phase03_audio_push_to_talk.py`) | Terminal-only volume visualization. No equivalent exists in HTTP APIs — there is no terminal to draw bars in. |
+| `keyboard` library | P3 (`phase03_audio_push_to_talk.py`) | Push-to-talk control. Replaced by Flutter's native microphone capture, not by any server-side equivalent. |
+| `sounddevice` library | P3 (`phase03_audio_live_vosk.py`, `phase03_audio_push_to_talk.py`) | Hardware microphone capture. Replaced by HTTP file upload, not by any server-side equivalent. |
+| `vosk` library | P3 (`phase03_audio_live_vosk.py`, `phase03_audio_push_to_talk.py`) | Offline speech-to-text. Replaced by Groq Whisper in the orchestrator, but the usage patterns are completely different (offline streaming vs. cloud batch). |
+| `DURATION = 5` variable | P3 (`phase03_audio_live_vosk.py`) | Defined but never referenced. Evidence of an abandoned fixed-duration recording mode. |
+| ANSI color `COLOR` dict | P3 (`phase03_audio_push_to_talk.py`) | Terminal color coding per emotion. No equivalent in JSON APIs. |
+| `JSONResponse` import | P6 (`phase06_fusion_api_monolith.py`) | Imported but never used. FastAPI auto-converts dicts to JSON. |
+| `word_tokenize` import | P4 (`phase04_text_attention_tester.py`) | Imported from NLTK but never called. Only `sent_tokenize` was used. |
+| `time` import | P3 (`phase03_audio_live_vosk.py`) | Imported but never called. Likely intended for timing measurements. |
+| `representative_dataset()` | P5 (`phase05_convert_tflite_attempt.py`) | TFLite calibration generator defined but never called. |
+| `model_func()` | P5 (`phase05_convert_tflite_attempt.py`) | Invalid `@tf.function` wrapping of `interpreter.invoke()`. Never executed. |
+| `cv2.putText` emotion overlay | P3 (`phase03_vision_webcam_early.py`) | Direct window overlay abandoned when moving to headless APIs. |
 
 ---
 
@@ -95,16 +95,16 @@ This document traces the complete lineage of every function, class, configuratio
 
 | Model File | Born | Format | Accuracy | Status |
 |---|---|---|---|---|
-| `emotion_model.h5` | P1 (`1.py`) | HDF5 | ~57% | Superseded |
+| `emotion_model.h5` | P1 (`phase01_vision_cnn_trainer.py`) | HDF5 | ~57% | Superseded |
 | `face_emotion_model.h5` (48×48) | P1 (`cnn model/`) | HDF5 | 57% | Superseded |
 | `face_emotion_model.h5` (7.5MB, `emotion_api/`) | P6 | HDF5 | Unknown (different model?) | Superseded |
-| `speech_emotion_model_7.h5` | P2 (`v4.py`) | HDF5 | Unknown | Superseded |
+| `speech_emotion_model_7.h5` | P2 (`phase02_audio_lstm_trainer.py`) | HDF5 | Unknown | Superseded |
 | `final_lstm_model.h5` | P6 (`emotion_api/`) | HDF5 | Unknown | Superseded by TF2.12 fix |
 | `final_lstm_model_tf212.h5` | P6 (`emotion_api/`) | HDF5 | Unknown | Superseded |
 | `voice_model_tf212_FIXED.h5` | P6 (`emotion_api/`) | HDF5 | Unknown | Superseded |
-| `emotion_bilstm_model.h5` | P4 (`textemo.py`) | HDF5 | Unknown (5 epochs) | Superseded |
+| `emotion_bilstm_model.h5` | P4 (`phase04_text_bilstm_trainer.py`) | HDF5 | Unknown (5 epochs) | Superseded |
 | `emotion_TEXT_cnn_model.h5` | P4 (external) | HDF5 | Unknown | Superseded |
-| `emotion_model_tf212_fixed.h5` | P4 (`textemotion_tf212.py`) | HDF5 | Unknown | Superseded |
+| `emotion_model_tf212_fixed.h5` | P4 (`phase04_text_negation_engine.py`) | HDF5 | Unknown | Superseded |
 | `fer_best_model.keras` | P7+ (Kaggle) | Keras 3 | **81.03%** | **ACTIVE** (Vision) |
 | `audio_best_model.keras` | P8 (Kaggle) | Keras 3 | **94.10%** | Converted to TFLite |
 | `audio_model.tflite` | P8 (`convert_audio_model.py`) | TFLite float16 | 94.10% | **ACTIVE** (Audio) |

@@ -4,24 +4,24 @@
 
 ## Overview
 This document preserves the **complete model training history** across every iteration — from the earliest Phase 1 FER2013 CNN, through each model format migration, to the final production Kaggle-trained models. Training data was extracted from:
-- **`FYP old MODELS apis.txt`** (128KB, 2697 lines) — Complete Kaggle notebook dump for the FERPlus CNN
-- **`Model notebooks.txt`** — Kaggle training code for Audio BiLSTM and Text BiLSTM+Attention
-- **`cnn model/1.ipynb`** (222KB, 2 code cells) — Phase 1 CNN training notebook with full training logs and evaluation output
-- **`11.ipynb`** (189KB, 1 code cell) — Earlier Phase 1 CNN iteration with `1.py`-equivalent architecture
-- **`speech.ipynb`** (93KB, 7 code cells) — Live microphone emotion detection, LSTM model loading/testing, TF2.12 format migration, and LSTM trainer
-- **`speech1.ipynb`** (47KB, 2 code cells) — Second audio LSTM trainer iteration and `voice_model_tf212_FIXED.h5` rebuilder
-- **`textemo.ipynb`** (255KB, 4 code cells) — Complete text training pipeline: first attempt with stemming+context filtering, second clean training run, and universal inference code
-- **`text.ipynb`** (35KB, 1 code cell) — Text inference tester with AttentionLayer + paragraph-level voting
+- **`training_models_old_apis_dump.txt`** (128KB, 2697 lines) — Complete Kaggle notebook dump for the FERPlus CNN
+- **`training_models_notebook_dump.txt`** — Kaggle training code for Audio BiLSTM and Text BiLSTM+Attention
+- **`phase01_vision_cnn_notebook.ipynb`** (222KB, 2 code cells) — Phase 1 CNN training notebook with full training logs and evaluation output
+- **`phase01_vision_cnn_notebook_alt.ipynb`** (189KB, 1 code cell) — Earlier Phase 1 CNN iteration with `phase01_vision_cnn_trainer.py`-equivalent architecture
+- **`phase02_audio_training_notebook.ipynb`** (93KB, 7 code cells) — Live microphone emotion detection, LSTM model loading/testing, TF2.12 format migration, and LSTM trainer
+- **`phase02_audio_training_notebook_v2.ipynb`** (47KB, 2 code cells) — Second audio LSTM trainer iteration and `voice_model_tf212_FIXED.h5` rebuilder
+- **`phase04_text_training_notebook.ipynb`** (255KB, 4 code cells) — Complete text training pipeline: first attempt with stemming+context filtering, second clean training run, and universal inference code
+- **`phase04_text_exploration_notebook.ipynb`** (35KB, 1 code cell) — Text inference tester with AttentionLayer + paragraph-level voting
 
 ---
 
 ## 1. Vision Model Evolution: FER2013 → FERPlus CNN
 
-### 1.1 Iteration A: `11.ipynb` — The `1.py` Equivalent (Phase 1)
+### 1.1 Iteration A: `phase01_vision_cnn_notebook_alt.ipynb` — The `phase01_vision_cnn_trainer.py` Equivalent (Phase 1)
 
-**Source**: `FYP old/11.ipynb` (189KB)
+**Source**: `FYP old/phase01_vision_cnn_notebook_alt.ipynb` (189KB)
 **Dataset**: FER2013 original (`archive_5/`) — 28,709 training / 7,178 test images
-**Architecture**: Minimal 3-layer CNN (identical to `1.py`)
+**Architecture**: Minimal 3-layer CNN (identical to `phase01_vision_cnn_trainer.py`)
 ```
 Conv2D(32, 3×3, relu) → MaxPool(2×2)
 Conv2D(64, 3×3, relu) → MaxPool(2×2)
@@ -57,15 +57,15 @@ Output: Dense(7, softmax)
     surprise       0.72      0.72      0.72      831
     accuracy                           0.57     7178
 ```
-**Output Files**: `emotion_model.h5`, `accuracy_plot.png`, `loss_plot.png`, `confusion_matrix.png`, `classification_report.txt`
+**Output Files**: `emotion_model.h5`, `phase01_vision_accuracy_plot.png`, `loss_plot.png`, `phase01_vision_confusion_matrix.png`, `phase01_vision_classification_report_root.txt`
 
 **Fatal Flaws**: Disgust 3% recall (model learned to never predict it), Fear 18% recall (confused with Surprise at 48×48), no augmentation caused overfitting, no class weights on heavily imbalanced data.
 
 ---
 
-### 1.2 Iteration B: `cnn model/1.ipynb` — Improved Phase 1 CNN
+### 1.2 Iteration B: `phase01_vision_cnn_notebook.ipynb` — Improved Phase 1 CNN
 
-**Source**: `FYP old/cnn model/1.ipynb` (222KB)
+**Source**: `FYP old/phase01_vision_cnn_notebook.ipynb` (222KB)
 **Dataset**: FER2013 original (`archive_5/`) — same 28,709/7,178 split
 **Architecture**: More sophisticated CNN with BatchNormalization and SeparableConv2D
 ```
@@ -78,7 +78,7 @@ SeparableConv2D(128, 3×3, padding='same') → BatchNorm → Activation('relu') 
 GlobalAveragePooling2D
 Dense(7, softmax)
 ```
-- **Total params**: 45,959 (179.53 KB) — **13× smaller** than `11.ipynb`'s model
+- **Total params**: 45,959 (179.53 KB) — **13× smaller** than `phase01_vision_cnn_notebook_alt.ipynb`'s model
 - **Input**: 48×48 grayscale
 - **Key improvement**: Added `compute_class_weight('balanced')` — computed weights: `{disgust: 9.41, fear: 1.00, happy: 0.57, neutral: 0.83, ...}`
 - **Callbacks**: `EarlyStopping(patience=10)`, `ReduceLROnPlateau(patience=5, factor=0.5)`
@@ -106,7 +106,7 @@ Dense(7, softmax)
     surprise       0.57      0.79      0.66      831
     accuracy                           0.53     7178
 ```
-**Output Files**: `face_emotion_model.h5`, `accuracy_plot.png`, `loss_plot.png`, `confusion_matrix.png`, `classification_report.txt`
+**Output Files**: `face_emotion_model.h5`, `phase01_vision_accuracy_plot.png`, `loss_plot.png`, `phase01_vision_confusion_matrix.png`, `phase01_vision_classification_report_root.txt`
 
 **Key Insight**: Lower overall accuracy (53% vs 57%) BUT Disgust recall jumped from **3% → 54%** thanks to class weighting. The model was too small (45K params) — SeparableConv2D + GlobalAvgPool was too aggressive at reducing parameters. Still no CLAHE, still 48×48.
 
@@ -114,7 +114,7 @@ Dense(7, softmax)
 
 ### 1.3 Iteration C: FERPlus Kaggle Retraining — Production Model
 
-**Source**: `FYP old MODELS apis.txt` (128KB Kaggle dump)
+**Source**: `training_models_old_apis_dump.txt` (128KB Kaggle dump)
 **Dataset**: **FERPlus** (Microsoft-corrected labels) — 58,379 training / 7,341 validation / 3,543 test
 **Architecture**: 4-Block CNN (14.5M params)
 ```
@@ -160,7 +160,7 @@ Output: Dense(7, softmax)
 
 ### Vision Model Comparative Summary
 
-| Attribute | `11.ipynb` (Phase 1a) | `cnn model/1.ipynb` (Phase 1b) | FERPlus Kaggle (Production) |
+| Attribute | `phase01_vision_cnn_notebook_alt.ipynb` (Phase 1a) | `phase01_vision_cnn_notebook.ipynb` (Phase 1b) | FERPlus Kaggle (Production) |
 |---|---|---|---|
 | **Phase** | Phase 1 | Phase 1 | Post-Phase 7 (Kaggle) |
 | **Dataset** | FER2013 (`archive_5`) | FER2013 (`archive_5`) | **FERPlus** (corrected labels) |
@@ -181,15 +181,15 @@ Output: Dense(7, softmax)
 | **Model File** | `emotion_model.h5` | `face_emotion_model.h5` | `fer_best_model.keras` |
 | **Status** | Superseded | Superseded | **ACTIVE** |
 
-**Key Takeaway**: The 57% → 81% accuracy jump came from **four simultaneous improvements**: (1) FERPlus labels, (2) 112×112 + CLAHE, (3) 14.5M param architecture with 5×5 kernels, (4) data augmentation. No single change was sufficient alone — `cnn model/1.ipynb` proved that class weights alone (with a tiny model) actually *reduced* overall accuracy while improving minority class recall.
+**Key Takeaway**: The 57% → 81% accuracy jump came from **four simultaneous improvements**: (1) FERPlus labels, (2) 112×112 + CLAHE, (3) 14.5M param architecture with 5×5 kernels, (4) data augmentation. No single change was sufficient alone — `phase01_vision_cnn_notebook.ipynb` proved that class weights alone (with a tiny model) actually *reduced* overall accuracy while improving minority class recall.
 
 ---
 
 ## 2. Audio Model Evolution: Simple LSTM → BiLSTM → TFLite
 
-### 2.1 `speech.ipynb` — Phase 2 Audio Training & TF2.12 Migration
+### 2.1 `phase02_audio_training_notebook.ipynb` — Phase 2 Audio Training & TF2.12 Migration
 
-**Source**: `FYP old/speech.ipynb` (93KB, 7 code cells)
+**Source**: `FYP old/phase02_audio_training_notebook.ipynb` (93KB, 7 code cells)
 
 **Cell 0 (Live Microphone Detection)**:
 - Loads `speech_emotion_model_7_lstm_clean.h5` — the "clean" variant of the Phase 2 model
@@ -226,12 +226,12 @@ Output: Dense(7, softmax)
 - Loaded `emotion_api/voice_model_tf212_FIXED.h5` — the final fixed model
 - Verified architecture matches: 428,104 params, same BiLSTM stack
 
-### 2.2 `speech1.ipynb` — Phase 2 Second Training Iteration
+### 2.2 `phase02_audio_training_notebook_v2.ipynb` — Phase 2 Second Training Iteration
 
-**Source**: `FYP old/speech1.ipynb` (47KB, 2 code cells)
+**Source**: `FYP old/phase02_audio_training_notebook_v2.ipynb` (47KB, 2 code cells)
 
 **Cell 0 (LSTM Trainer)**:
-- Near-identical to `speech.ipynb` Cell 4 but as a `Sequential` model:
+- Near-identical to `phase02_audio_training_notebook.ipynb` Cell 4 but as a `Sequential` model:
 - `LSTM(128) → Dropout(0.3) → Dense(64, relu) → Dropout(0.3) → Dense(7, softmax)`
 - Same RAVDESS dataset, same calm→neutral merge, same MFCC extraction
 - **Note**: This notebook ran on a **different Python environment** (`anaconda3/envs/ev_1`, Python 3.6) and **crashed** with `ImportError: DLL load failed` (numpy/mkl incompatibility)
@@ -243,7 +243,7 @@ Output: Dense(7, softmax)
 
 ### 2.3 Production Model — `audio_best_model.keras` → `audio_model.tflite`
 
-**Source**: `Model notebooks.txt` (Kaggle training)
+**Source**: `training_models_notebook_dump.txt` (Kaggle training)
 - **Dataset**: RAVDESS
 - **Architecture**: BiLSTM with custom Attention mechanism
 - **Final accuracy**: **94.10%** on test set
@@ -265,7 +265,7 @@ converter.target_spec.supported_ops = [
 
 ### Audio Model Comparative Summary
 
-| Attribute | `speech.ipynb` Cell 4 (Phase 2) | `speech1.ipynb` (Phase 2) | Production (Kaggle) |
+| Attribute | `phase02_audio_training_notebook.ipynb` Cell 4 (Phase 2) | `phase02_audio_training_notebook_v2.ipynb` (Phase 2) | Production (Kaggle) |
 |---|---|---|---|
 | **Architecture** | Sequential LSTM(128) | Sequential LSTM(128) | **BiLSTM + Attention** |
 | **Bidirectional** | ❌ (unidirectional) | ❌ (unidirectional) | ✅ |
@@ -285,9 +285,9 @@ converter.target_spec.supported_ops = [
 
 ## 3. Text Model Evolution: CNN → BiLSTM → BiLSTM+Attention
 
-### 3.1 `textemo.ipynb` — Phase 4 Complete Text Training Pipeline
+### 3.1 `phase04_text_training_notebook.ipynb` — Phase 4 Complete Text Training Pipeline
 
-**Source**: `FYP old/textemo.ipynb` (255KB, 4 code cells)
+**Source**: `FYP old/phase04_text_training_notebook.ipynb` (255KB, 4 code cells)
 
 **Cell 0 (Inference with Stemming + Context Check)**:
 - First `AttentionLayer` using `tf.tensordot` (TF 2.x compatible)
@@ -322,9 +322,9 @@ converter.target_spec.supported_ops = [
 - **Load failed**: `"object 'model_config' doesn't exist"` — HDF5 format incompatibility with Keras 3
 - This failure is what drove the migration to `.keras` format in production
 
-### 3.2 `text.ipynb` — Phase 4 Inference Tester
+### 3.2 `phase04_text_exploration_notebook.ipynb` — Phase 4 Inference Tester
 
-**Source**: `FYP old/text.ipynb` (35KB, 1 code cell)
+**Source**: `FYP old/phase04_text_exploration_notebook.ipynb` (35KB, 1 code cell)
 - Pure inference script, no training
 - Custom `AttentionLayer` using `K.dot(x, self.W)` (Keras backend ops)
 - Paragraph-level voting: `sentence → predict → vote_counter + prob_accumulator → paragraph_emotion`
@@ -332,7 +332,7 @@ converter.target_spec.supported_ops = [
 
 ### 3.3 Production Model — `text_best_model.keras`
 
-**Source**: `Model notebooks.txt` (Kaggle training)
+**Source**: `training_models_notebook_dump.txt` (Kaggle training)
 - **Dataset**: Merged Kaggle emotion text datasets (with `'suprise'` → `'surprise'` typo fix)
 - **Architecture**: `Embedding(30000, 128) → BiLSTM(128) → Custom AttentionLayer → Dense(64) → Dense(6, softmax)`
 - **Final accuracy**: **94.04%** on test set
@@ -342,7 +342,7 @@ converter.target_spec.supported_ops = [
 
 ### Text Model Comparative Summary
 
-| Attribute | `textemo.ipynb` Cell 1 (Phase 4a) | `textemo.ipynb` Cell 2 (Phase 4b) | Production (Kaggle) |
+| Attribute | `phase04_text_training_notebook.ipynb` Cell 1 (Phase 4a) | `phase04_text_training_notebook.ipynb` Cell 2 (Phase 4b) | Production (Kaggle) |
 |---|---|---|---|
 | **Dataset Size** | 841,806 (oversampled) | 422,746 (raw) | ~400K (merged Kaggle) |
 | **Sexual Filtering** | ✅ (1,771 removed) | ❌ | Unknown |
@@ -364,16 +364,16 @@ converter.target_spec.supported_ops = [
 
 ## 4. Audio Model Format Migration Chain
 
-The audio model went through a complex format migration documented across `speech.ipynb` and `speech1.ipynb`:
+The audio model went through a complex format migration documented across `phase02_audio_training_notebook.ipynb` and `phase02_audio_training_notebook_v2.ipynb`:
 
 ```
 speech_emotion_model_7.h5 (Phase 2 original, Sequential LSTM)
      ↓
 final_lstm_model.h5 (BiLSTM rebuild, 428K params, input shape 174×120)
      ↓
-final_lstm_model_tf212.h5 (speech.ipynb Cell 5: manual weight copy to TF2.12-compatible model)
+final_lstm_model_tf212.h5 (phase02_audio_training_notebook.ipynb Cell 5: manual weight copy to TF2.12-compatible model)
      ↓
-voice_model_tf212_FIXED.h5 (speech1.ipynb Cell 1: final clean rebuild with proper layer naming)
+voice_model_tf212_FIXED.h5 (phase02_audio_training_notebook_v2.ipynb Cell 1: final clean rebuild with proper layer naming)
      ↓
 audio_best_model.keras (Kaggle retrained BiLSTM+Attention, 94.10%)
      ↓
@@ -388,21 +388,21 @@ Each migration was triggered by TensorFlow/Keras version incompatibilities when 
 
 | Artifact | Phase | Notebook Source | Notes |
 |---|---|---|---|
-| `speech.ipynb` (93KB) | Phase 2 | — | 7 cells: live detection + LSTM trainer + TF2.12 migration |
-| `speech1.ipynb` (47KB) | Phase 2 | — | 2 cells: LSTM trainer (crashed on Python 3.6) + TF2.12 rebuilder |
-| `textemo.ipynb` (255KB) | Phase 4 | — | 4 cells: stemming inference + 2 training runs + universal inference |
-| `text.ipynb` (35KB) | Phase 4 | — | 1 cell: pure inference tester with AttentionLayer |
-| `cnn model/1.ipynb` (222KB) | Phase 1 | — | 2 cells: improved CNN trainer (53% acc) + face detector UI |
-| `11.ipynb` (189KB) | Phase 1 | — | 1 cell: original `1.py`-equivalent CNN (57% acc) |
+| `phase02_audio_training_notebook.ipynb` (93KB) | Phase 2 | — | 7 cells: live detection + LSTM trainer + TF2.12 migration |
+| `phase02_audio_training_notebook_v2.ipynb` (47KB) | Phase 2 | — | 2 cells: LSTM trainer (crashed on Python 3.6) + TF2.12 rebuilder |
+| `phase04_text_training_notebook.ipynb` (255KB) | Phase 4 | — | 4 cells: stemming inference + 2 training runs + universal inference |
+| `phase04_text_exploration_notebook.ipynb` (35KB) | Phase 4 | — | 1 cell: pure inference tester with AttentionLayer |
+| `phase01_vision_cnn_notebook.ipynb` (222KB) | Phase 1 | — | 2 cells: improved CNN trainer (53% acc) + face detector UI |
+| `phase01_vision_cnn_notebook_alt.ipynb` (189KB) | Phase 1 | — | 1 cell: original `phase01_vision_cnn_trainer.py`-equivalent CNN (57% acc) |
 | `test.ipynb` (0 bytes) | — | — | Empty file (deleted or never written) |
 | `lstm_fold1-5_best.h5` | Phase 2 | Kaggle | K-fold validation checkpoints for BiLSTM+Attention |
 | `lstm_histories.pkl` | Phase 2 | Kaggle | Pickled training curves across 5 folds |
 | `lstm_confusion_matrix.png` | Phase 2 | Kaggle | Visual evaluation of LSTM model |
 | `lstm_training_curves.png` | Phase 2 | Kaggle | Training/validation convergence plots |
-| `accuracy_plot.png` | Phase 1 | `cnn model/1.ipynb` | CNN training accuracy curves |
-| `loss_plot.png` | Phase 1 | `cnn model/1.ipynb` | CNN training loss curves |
-| `confusion_matrix.png` | Phase 1 | `cnn model/1.ipynb` | Phase 1 CNN confusion matrix |
-| `classification_report.txt` | Phase 1 | `11.ipynb` | 57% accuracy report |
+| `phase01_vision_accuracy_plot.png` | Phase 1 | `phase01_vision_cnn_notebook.ipynb` | CNN training accuracy curves |
+| `loss_plot.png` | Phase 1 | `phase01_vision_cnn_notebook.ipynb` | CNN training loss curves |
+| `phase01_vision_confusion_matrix.png` | Phase 1 | `phase01_vision_cnn_notebook.ipynb` | Phase 1 CNN confusion matrix |
+| `phase01_vision_classification_report_root.txt` | Phase 1 | `phase01_vision_cnn_notebook_alt.ipynb` | 57% accuracy report |
 
 ---
 

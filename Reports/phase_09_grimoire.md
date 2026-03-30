@@ -6,10 +6,10 @@
 
 | File | Location | Role |
 |---|---|---|
-| `main_audio.py` | `services/audio_api/` | Production Audio Emotion API |
+| `phase08_audio_api_preprod.py` | `services/audio_api/` | Production Audio Emotion API |
 | `convert_audio_model.py` | `services/audio_api/` | Keras → TFLite converter |
-| `main_video.py` | `services/image_video_api/` | Production Vision Emotion API |
-| `main_text.py` | `services/text_api/` | Production Text Emotion API |
+| `phase08_vision_api_preprod.py` | `services/image_video_api/` | Production Vision Emotion API |
+| `phase08_text_api_preprod.py` | `services/text_api/` | Production Text Emotion API |
 | `orchestrator_v3.py` | `services/fusion_api/` | Master Orchestrator: fusion, LLM, auth, DB |
 | `database.py` | `services/fusion_api/` | Async SQLAlchemy ORM models |
 | `start_servers.bat` | `launch_scripts/` | Multi-service Windows launcher |
@@ -23,7 +23,7 @@ Due to the scale of Phase 9 files (235+ lines each, orchestrator at 651 lines), 
 
 ---
 
-### Service 1: `main_audio.py` — 8 Evolutionary Leaps
+### Service 1: `phase08_audio_api_preprod.py` — 8 Evolutionary Leaps
 
 #### Leap 1: TFLite Primary Inference (Replaces Phase 2-7 `model.predict`)
 ```python
@@ -58,7 +58,7 @@ mean = np.mean(mfccs)
 std = np.std(mfccs) + 1e-9  # epsilon prevents division by zero
 mfccs = (mfccs - mean) / std
 ```
-- **What this replaces**: Raw MFCC values used in `v4.py`, `v5.py`, `v6.py`, `emotion_api/main.py`, `2nd attempt Audio.txt`.
+- **What this replaces**: Raw MFCC values used in `phase02_audio_lstm_trainer.py`, `phase03_audio_live_vosk.py`, `phase03_audio_push_to_talk.py`, `phase06_fusion_api_monolith.py`, `phase07_audio_api_standalone.txt`.
 - **Why**: Raw MFCC magnitudes vary with recording volume. A loud voice produces higher absolute values regardless of emotion. Z-score normalization centers the data at mean=0, std=1, forcing the model to focus on relative tonal patterns instead of absolute volume. This eliminated the "False Angry" bias.
 - **`+ 1e-9`**: Epsilon guard against division by zero for completely silent audio (where std=0).
 
@@ -89,7 +89,7 @@ logging.basicConfig(
 
 ---
 
-### Service 2: `main_video.py` — 6 Evolutionary Leaps
+### Service 2: `phase08_vision_api_preprod.py` — 6 Evolutionary Leaps
 
 #### Leap 1: MediaPipe Tasks Vision API (Replaces Phase 7 `mp.solutions`)
 ```python
@@ -166,7 +166,7 @@ finally:
 
 ---
 
-### Service 3: `main_text.py` — 5 Evolutionary Leaps
+### Service 3: `phase08_text_api_preprod.py` — 5 Evolutionary Leaps
 
 #### Leap 1: Keras 3 Ops (Replaces Phase 7 `K.*` backend ops)
 ```python
@@ -179,7 +179,7 @@ class AttentionLayer(Layer):
         output = x * a
         return ops.sum(output, axis=1)
 ```
-- **What this replaces**: `K.tanh(K.dot(x, self.W) + self.b)` from Phase 7's `2nd attempt Text.txt`.
+- **What this replaces**: `K.tanh(K.dot(x, self.W) + self.b)` from Phase 7's `phase07_text_api_standalone.txt`.
 - **Why**: `tensorflow.keras.backend` (`K`) was deprecated in Keras 3. The `keras.ops` module provides the same mathematical operations with backend-agnostic execution (supports JAX, PyTorch, TensorFlow).
 
 #### Leap 2: Pre-Compiled Regex (Replaces runtime compilation)
@@ -190,7 +190,7 @@ HASHTAG_PATTERN = re.compile(r'#')
 SPECIAL_CHAR_PATTERN = re.compile(r'[^a-zA-Z\s]')
 WHITESPACE_PATTERN = re.compile(r'\s+')
 ```
-- **What this replaces**: Implicit runtime regex compilation in `textemotion_tf212.py`'s `rewrite_sentence()` and `is_context_clear()`.
+- **What this replaces**: Implicit runtime regex compilation in `phase04_text_negation_engine.py`'s `rewrite_sentence()` and `is_context_clear()`.
 - **Why**: `re.compile()` at module scope compiles regex patterns once during import. Without pre-compilation, Python recompiles the regex pattern on every function call — measurable overhead when processing thousands of requests.
 
 #### Leap 3: `@tf.function` + Batch Inference + Thread Offloading
@@ -402,7 +402,7 @@ response_data["show_emotion_ui"] = True if detected_emotion else False
 | Database | None | Async SQLAlchemy + aiosqlite | New component |
 | Crisis detection | None | Pre-compiled regex gate | New component |
 | Contradiction engine | None | Affective masking detection | New component |
-| Deployment | Manual `python main.py` | `start_servers.bat` with 4 workers each | Infrastructure addition |
+| Deployment | Manual `python phase06_fusion_api_monolith.py` | `start_servers.bat` with 4 workers each | Infrastructure addition |
 
 ---
 

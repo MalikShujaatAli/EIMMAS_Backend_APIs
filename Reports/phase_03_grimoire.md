@@ -6,16 +6,16 @@
 
 | File | Size (bytes) | Role |
 |---|---|---|
-| `FYP old/3.py` | 3,004 | Live webcam face emotion detector |
-| `FYP old/realtimedetection.py` | 1,427 | Earliest live webcam face emotion prototype |
-| `FYP old/v5.py` | 3,341 | Continuous speech emotion + Vosk subtitles |
-| `FYP old/v6.py` | 4,389 | Push-to-talk speech emotion with spacebar |
+| `FYP old/phase03_vision_webcam_scaled.py` | 3,004 | Live webcam face emotion detector |
+| `FYP old/phase03_vision_webcam_early.py` | 1,427 | Earliest live webcam face emotion prototype |
+| `FYP old/phase03_audio_live_vosk.py` | 3,341 | Continuous speech emotion + Vosk subtitles |
+| `FYP old/phase03_audio_push_to_talk.py` | 4,389 | Push-to-talk speech emotion with spacebar |
 
 ---
 
 ## Header 2: Line-by-Line Logic Migration
 
-### File: `realtimedetection.py` (Earliest Concept)
+### File: `phase03_vision_webcam_early.py` (Earliest Concept)
 
 This 39-line script is the **absolute earliest face detection prototype**. 
 - Loads `emotiondetector1.json` + `emotiondetector1.h5` instead of `face_emotion_model.h5`.
@@ -23,11 +23,11 @@ This 39-line script is the **absolute earliest face detection prototype**.
 - Resizes directly to `(48,48)` and reshapes to `(1,48,48,1)` before `/255.0` normalization.
 - Uses `cv2.rectangle` and `cv2.putText` to overlay the top emotion directly on the webcam window.
 - Catches and silently ignores `cv2.error`.
-- **Significance**: Proves the initial concept of running a CNN on webcam frames via Haar Cascades, setting the stage for `3.py` and the FastAPI monoliths.
+- **Significance**: Proves the initial concept of running a CNN on webcam frames via Haar Cascades, setting the stage for `phase03_vision_webcam_scaled.py` and the FastAPI monoliths.
 
 ---
 
-### File: `3.py` (Complete Source)
+### File: `phase03_vision_webcam_scaled.py` (Complete Source)
 
 ```python
 import cv2
@@ -128,14 +128,14 @@ cv2.destroyAllWindows()
 - **What this solves**: Loading the Phase 1 CNN model for real-time inference.
 - **`face_emotion_model.h5`**: This is the 48×48 CNN from Phase 1 (or the `cnn model/` notebook), NOT the later 112×112 FERPlus model.
 - **Label ordering**: Title-case, manually ordered as `['Angry','Disgust','Fear','Happy','Sad','Surprise','Neutral']`. This ordering does NOT match sklearn's alphabetical convention (which would put Neutral before Sad). This is a hardcoded assumption about the training label order. If the training used `flow_from_directory` (which sorts alphabetically), the correct order would be `['Angry','Disgust','Fear','Happy','Neutral','Sad','Surprise']`. This potential mismatch was a latent bug.
-- **Phase 9 resolution**: `main_video.py` uses `INT_TO_EMOTION = {0:'angry', 1:'disgust', 2:'fear', 3:'happy', 4:'neutral', 5:'sad', 6:'surprise'}` which is explicitly alphabetical and matches the Kaggle training notebook's `sorted(os.listdir())` ordering.
+- **Phase 9 resolution**: `phase08_vision_api_preprod.py` uses `INT_TO_EMOTION = {0:'angry', 1:'disgust', 2:'fear', 3:'happy', 4:'neutral', 5:'sad', 6:'surprise'}` which is explicitly alphabetical and matches the Kaggle training notebook's `sorted(os.listdir())` ordering.
 
 #### Block 2: Haar Cascade (Lines 14-16)
 - **What this solves**: Face detection — locating the rectangular region of an image containing a face.
 - **`haarcascade_frontalface_default.xml`**: An ancient (2001) machine learning algorithm based on Haar-like features and Adaboost cascade classifiers. It runs fast but has high false-positive rates.
 - **Logical flaw — False positives**: Haar cascades detect patterns of light/dark regions characteristic of faces, but similar patterns appear in textured wallpaper, electrical outlets, pet faces, and book covers. Every false detection sends garbage pixel data into the emotion model, producing random predictions that undermine user trust.
-- **Phase 7 replacement**: `2nd attempt Video.txt` replaces Haar with `mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.6)`.
-- **Phase 9 replacement**: `main_video.py` uses the MediaPipe Tasks Vision API (`vision.FaceDetector`) with `min_detection_confidence=0.75`.
+- **Phase 7 replacement**: `phase07_vision_api_standalone.txt` replaces Haar with `mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.6)`.
+- **Phase 9 replacement**: `phase08_vision_api_preprod.py` uses the MediaPipe Tasks Vision API (`vision.FaceDetector`) with `min_detection_confidence=0.75`.
 
 #### Block 3: Preprocessing (Lines 21-26)
 - **`cv2.resize(gray_face, (48, 48))`**: Matches the Phase 1 CNN's input size. No CLAHE, no INTER_CUBIC interpolation (uses default bilinear).
@@ -144,7 +144,7 @@ cv2.destroyAllWindows()
 
 #### Block 4: Prediction with 0.55 Scaling (Lines 32-50)
 - **`raw_pred = model.predict(processed_face, verbose=0)[0]`**: Synchronous, eager-mode prediction. `verbose=0` suppresses the progress bar.
-- **`scaled_pred = raw_pred * 0.55`**: An arbitrary calibration factor that reduces all probability values by 45%. The comment says "PREDICT EMOTIONS WITH PROBABILITIES × 0.55" but provides no mathematical justification. This scaling was likely an empirical attempt to make confidence scores "feel" more realistic — raw softmax outputs often cluster near 0.9+ for the top class, which seemed "overconfident" during demos. The scaling factor varies across phases: `3.py` uses 0.55, `old endpoints.txt` uses 0.65, `emotion_api/main.py` uses 0.55 for face and 0.66 for voice. All scaling was removed in Phase 9 — the raw softmax output is reported directly.
+- **`scaled_pred = raw_pred * 0.55`**: An arbitrary calibration factor that reduces all probability values by 45%. The comment says "PREDICT EMOTIONS WITH PROBABILITIES × 0.55" but provides no mathematical justification. This scaling was likely an empirical attempt to make confidence scores "feel" more realistic — raw softmax outputs often cluster near 0.9+ for the top class, which seemed "overconfident" during demos. The scaling factor varies across phases: `phase03_vision_webcam_scaled.py` uses 0.55, `phase06_fusion_api_old_endpoints.txt` uses 0.65, `phase06_fusion_api_monolith.py` uses 0.55 for face and 0.66 for voice. All scaling was removed in Phase 9 — the raw softmax output is reported directly.
 
 #### Block 5: Webcam Loop (Lines 55-92)
 - **`cv2.VideoCapture(0)`**: Opens the default camera device. The `0` is a hardware device index, not a file path.
@@ -156,7 +156,7 @@ cv2.destroyAllWindows()
 
 ---
 
-### File: `v5.py` (Complete Source)
+### File: `phase03_audio_live_vosk.py` (Complete Source)
 
 ```python
 import sounddevice as sd
@@ -259,11 +259,11 @@ with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize = 8000, device=None,
 ```
 
 #### Block 1: Model and Label Loading (Lines 1-15)
-- **`EMOTIONS = ['neutral', 'calm', 'happy', 'sad', 'angry', 'fearful', 'disgust']`**: This label list has 7 entries including "calm" as a separate class. However, `v4.py` merged calm into neutral during training, so the model's output layer has 7 nodes but "calm" and "neutral" share the same training distribution. If the model predicts index 1 ("calm" in this list), it's predicting a class that was trained as "neutral" — effectively duplicating the neutral prediction under a different name. The Phase 6 monolith addresses this with `merged_voice_label()`, but `v5.py` does not.
+- **`EMOTIONS = ['neutral', 'calm', 'happy', 'sad', 'angry', 'fearful', 'disgust']`**: This label list has 7 entries including "calm" as a separate class. However, `phase02_audio_lstm_trainer.py` merged calm into neutral during training, so the model's output layer has 7 nodes but "calm" and "neutral" share the same training distribution. If the model predicts index 1 ("calm" in this list), it's predicting a class that was trained as "neutral" — effectively duplicating the neutral prediction under a different name. The Phase 6 monolith addresses this with `merged_voice_label()`, but `phase03_audio_live_vosk.py` does not.
 - **`DURATION = 5`**: Defined but never used. Dead variable — evidence of an abandoned fixed-duration recording mode.
 
 #### Block 2: Feature Extraction (Lines 26-37)
-- **Identical to `v4.py`'s `extract_features`** with one key difference: the returned shape is `mfccs.T` (transposed), yielding `(174, 40)` — ready for LSTM input without the separate reshape step needed in `v4.py`.
+- **Identical to `phase02_audio_lstm_trainer.py`'s `extract_features`** with one key difference: the returned shape is `mfccs.T` (transposed), yielding `(174, 40)` — ready for LSTM input without the separate reshape step needed in `phase02_audio_lstm_trainer.py`.
 - **Still no trimming or normalization**: The "False Angry" bias persists.
 
 #### Block 3: Vosk Speech Recognition (Lines 22-24, 65-89)
@@ -282,7 +282,7 @@ with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize = 8000, device=None,
 
 ---
 
-### File: `v6.py` (Complete Source)
+### File: `phase03_audio_push_to_talk.py` (Complete Source)
 
 ```python
 import sounddevice as sd
@@ -436,14 +436,14 @@ with sd.RawInputStream(
         print("\n�4 Ready for next input... (Hold SPACEBAR again)\n")
 ```
 
-#### Improvements over `v5.py`
+#### Improvements over `phase03_audio_live_vosk.py`
 - **`keyboard.wait("space")` + `keyboard.is_pressed("space")`**: Replaces the Ctrl+C interrupt pattern with push-to-talk. Recording starts when spacebar is held and stops when released. This is a significant UX improvement — the user controls recording duration.
 - **`MIN_SPEECH_VOLUME = 1500`**: A volume threshold check using `np.linalg.norm(audio)`. If the total audio energy is below 1500, the prediction is skipped ("No speech detected"). This prevents the model from hallucinating emotions from background noise. This concept evolved into Phase 7's `CONFIDENCE_THRESHOLD = 0.40` and Phase 9's dual-threshold filtering.
 - **Confidence score printout**: `predict_emotion()` now prints ALL class probabilities sorted by confidence, not just the top prediction. This debugging output helped identify the "False Angry" bias during development.
 - **Per-emotion terminal colors**: The `COLOR` dict maps each emotion to an ANSI color code for visual impact in the terminal.
 - **Subtitle accumulation**: `final_subtitle` concatenates Vosk transcription results across the recording session, then displays the full transcript after spacebar release.
 
-#### Persistent Flaws from `v5.py`
+#### Persistent Flaws from `phase03_audio_live_vosk.py`
 - Same unbounded `full_audio.append()` memory leak.
 - Same lack of MFCC normalization.
 - Same `model.predict()` eager execution.
@@ -454,13 +454,13 @@ with sd.RawInputStream(
 
 ## Header 3: Micro-Decision Log
 
-| Decision | `v5.py` Value | `v6.py` Value | Phase 9 Value | Rationale |
+| Decision | `phase03_audio_live_vosk.py` Value | `phase03_audio_push_to_talk.py` Value | Phase 9 Value | Rationale |
 |---|---|---|---|---|
 | Recording trigger | Ctrl+C (interrupt) | Spacebar (push-to-talk) | HTTP `UploadFile` | Progressive decoupling from hardware |
 | Volume gating | None | `np.linalg.norm(audio) < 1500` | `CONFIDENCE_THRESHOLD` on model output | Moved from input-level to output-level filtering |
 | Confidence display | Top emotion only | All 7 sorted | JSON probabilities dict | Structured data for programmatic consumption |
 | Transcription engine | Vosk (offline) | Vosk (offline) | Groq Whisper API (cloud) | Higher accuracy, no local model weight |
-| Face detection method | Haar Cascade (`3.py`) | N/A | MediaPipe Tasks Vision API | Eliminated false positives |
+| Face detection method | Haar Cascade (`phase03_vision_webcam_scaled.py`) | N/A | MediaPipe Tasks Vision API | Eliminated false positives |
 | Label list | 7 entries (includes 'calm') | 7 entries (includes 'calm') | 7 entries (calm merged into neutral at training time) | Label mapping aligned with training |
 | Probability scaling | N/A | Raw softmax | Raw softmax | 0.55/0.65 scaling abandoned |
 
@@ -472,9 +472,9 @@ with sd.RawInputStream(
 
 | Phase 3 File | Where did its logic migrate? |
 |---|---|
-| `3.py` webcam loop | Replaced by FastAPI `/predict/image` and `/predict/video` endpoints (Phase 6 onward) |
-| `v5.py` continuous recording | Replaced by single-file upload `/predict_audio` endpoint (Phase 7 onward) |
-| `v6.py` push-to-talk | Replaced by Flutter's native microphone capture → HTTP upload → `/predict_audio` |
+| `phase03_vision_webcam_scaled.py` webcam loop | Replaced by FastAPI `/predict/image` and `/predict/video` endpoints (Phase 6 onward) |
+| `phase03_audio_live_vosk.py` continuous recording | Replaced by single-file upload `/predict_audio` endpoint (Phase 7 onward) |
+| `phase03_audio_push_to_talk.py` push-to-talk | Replaced by Flutter's native microphone capture → HTTP upload → `/predict_audio` |
 | Vosk speech recognition | Replaced by Groq Whisper transcription in Phase 9 orchestrator |
 | `heartbeat_bar()` function | No descendant. Terminal-only visualization with no server equivalent. |
 | `keyboard` library | No descendant. Hardware dependency eliminated. |
@@ -485,8 +485,8 @@ with sd.RawInputStream(
 
 | Phase 3 Concept | Phase 9 Descendant |
 |---|---|
-| `extract_features()` (MFCC extraction + pad/truncate) | `get_features_fast()` in `main_audio.py` |
-| `preprocess_face()` (resize + normalize + reshape) | `preprocess_face()` in `main_video.py` (112×112, CLAHE added) |
+| `extract_features()` (MFCC extraction + pad/truncate) | `get_features_fast()` in `phase08_audio_api_preprod.py` |
+| `preprocess_face()` (resize + normalize + reshape) | `preprocess_face()` in `phase08_vision_api_preprod.py` (112×112, CLAHE added) |
 | `model.predict(features)` | `compute_vision_inference(tensor)` / `compute_inference(tensor)` (`@tf.function` compiled) |
 | `MIN_SPEECH_VOLUME` threshold | `CONFIDENCE_THRESHOLD` on prediction output |
 | `full_audio → np.concatenate → predict` | `file_bytes → soundfile.read → get_features_fast → predict` |

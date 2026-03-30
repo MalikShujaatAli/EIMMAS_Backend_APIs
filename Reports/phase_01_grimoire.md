@@ -6,21 +6,21 @@
 
 | File | Size (bytes) | Role |
 |---|---|---|
-| `FYP old/1.py` | 1,490 | CNN face emotion model trainer |
-| `FYP old/2.py` | 145 | GPU availability diagnostic |
-| `FYP old/cnn model/1.ipynb` | 222,040 | Training notebook (Jupyter) |
+| `FYP old/phase01_vision_cnn_trainer.py` | 1,490 | CNN face emotion model trainer |
+| `FYP old/phase01_diagnostic_gpu_check.py` | 145 | GPU availability diagnostic |
+| `FYP old/phase01_vision_cnn_notebook.ipynb` | 222,040 | Training notebook (Jupyter) |
 | `FYP old/cnn model/face_emotion_model.h5` | 676,008 | Trained CNN weights output |
-| `FYP old/cnn model/classification_report.txt` | 609 | Evaluation metrics |
-| `FYP old/cnn model/accuracy_plot.png` | 36,263 | Training accuracy curve |
-| `FYP old/cnn model/confusion_matrix.png` | 46,880 | Confusion matrix heatmap |
+| `FYP old/phase01_vision_classification_report.txt` | 609 | Evaluation metrics |
+| `FYP old/phase01_vision_accuracy_plot.png` | 36,263 | Training accuracy curve |
+| `FYP old/phase01_vision_confusion_matrix.png` | 46,880 | Confusion matrix heatmap |
 | `FYP old/cnn model/loss_plot.png` | 37,165 | Training loss curve |
-| `FYP old/classification_report.txt` | 609 | Root-level copy of evaluation metrics |
+| `FYP old/phase01_vision_classification_report_root.txt` | 609 | Root-level copy of evaluation metrics |
 
 ---
 
 ## Header 2: Line-by-Line Logic Migration
 
-### File: `1.py` (Complete Source)
+### File: `phase01_vision_cnn_trainer.py` (Complete Source)
 
 ```python
 import numpy as np
@@ -89,14 +89,14 @@ print("✅ Model saved as emotion_model.h5")
 #### Block 2: Data Paths (Lines 8-9)
 - **What this solves**: Pointing to the local FER2013 dataset.
 - **Artifact**: `archive_5/` is the FER2013 original dataset (before FERPlus correction).
-- **Critical decision**: Using FER2013 instead of FERPlus. The FER2013 labels are crowd-sourced and contain significant noise — many images have debatable "correct" labels. This directly contributed to the 57% ceiling. The switch to FERPlus (Microsoft-corrected labels) did not happen until the Kaggle retraining in `Model notebooks.txt`.
+- **Critical decision**: Using FER2013 instead of FERPlus. The FER2013 labels are crowd-sourced and contain significant noise — many images have debatable "correct" labels. This directly contributed to the 57% ceiling. The switch to FERPlus (Microsoft-corrected labels) did not happen until the Kaggle retraining in `training_models_notebook_dump.txt`.
 
 #### Block 3: Data Generator (Lines 12-29)
 - **What this solves**: Loading images from directory structure and normalizing pixel values to [0,1].
 - **Logical flaw — No augmentation**: Despite the variable being named `datagen`, only `rescale=1./255` is applied. No rotation, zoom, flip, or shift augmentation is configured. The Phase 9 Kaggle notebook adds `rotation_range=10`, `zoom_range=0.1`, `width_shift_range=0.1`, `height_shift_range=0.1`, `horizontal_flip=True`.
 - **Logical flaw — No class weighting**: The FER2013 dataset is heavily imbalanced (Happy: 8,989 images vs Disgust: 547 images). Without `class_weight` in `model.fit()`, the optimizer learns to ignore minority classes. This is the direct cause of Disgust's 3% recall.
 - **Logical flaw — 48×48 resolution**: FER2013 images are natively 48×48. This resolution is extremely low for capturing subtle facial muscle movements. The Phase 9 model uses 112×112.
-- **Logical flaw — No CLAHE**: Images are used as-is. Dark or poorly-lit faces have crushed histograms, losing contrast in critical facial features. CLAHE was first introduced in Phase 7 (`2nd attempt Video.txt`).
+- **Logical flaw — No CLAHE**: Images are used as-is. Dark or poorly-lit faces have crushed histograms, losing contrast in critical facial features. CLAHE was first introduced in Phase 7 (`phase07_vision_api_standalone.txt`).
 
 #### Block 4: CNN Architecture (Lines 32-43)
 - **What this solves**: A minimal 3-layer CNN for spatial feature extraction.
@@ -117,7 +117,7 @@ print("✅ Model saved as emotion_model.h5")
 
 ---
 
-### File: `2.py` (Complete Source)
+### File: `phase01_diagnostic_gpu_check.py` (Complete Source)
 
 ```python
 import tensorflow as tf
@@ -127,12 +127,12 @@ print(tf.config.list_physical_devices('GPU'))
 
 #### Analysis
 - **What this solves**: Checking whether TensorFlow can see any GPU hardware.
-- **Context**: This was run before `1.py` to verify the development environment. The output determines whether `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` (disable GPU) should be set in later scripts.
+- **Context**: This was run before `phase01_vision_cnn_trainer.py` to verify the development environment. The output determines whether `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` (disable GPU) should be set in later scripts.
 - **Descendants**: No direct code descendant. The GPU check concept survives implicitly in the Phase 9 services, which all set `CUDA_VISIBLE_DEVICES = "-1"` explicitly because they deploy on CPU-only servers.
 
 ---
 
-### File: `classification_report.txt` (Complete Content)
+### File: `phase01_vision_classification_report_root.txt` (Complete Content)
 
 ```
               precision    recall  f1-score   support
@@ -190,7 +190,7 @@ Phase 1 is the genesis — there is no previous phase to diff against. The follo
 
 | Phase 1 Artifact | Immediate Descendant | Ultimate Descendant (Phase 9) |
 |---|---|---|
-| `1.py` (model trainer) | `cnn model/1.ipynb` (same architecture in notebook form) | `Model notebooks.txt` lines 937-1665 (complete FERPlus Kaggle retraining) |
-| `emotion_model.h5` / `face_emotion_model.h5` | `emotion_api/face_emotion_model.h5` (loaded by Phase 6 monolith) | `fer_best_model.keras` (loaded by Phase 9 `main_video.py`) |
-| `2.py` (GPU check) | No direct descendant | Spiritual descendant: `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` in all Phase 9 services |
-| `classification_report.txt` (57% accuracy) | No direct descendant | Replaced by Phase 9 FERPlus report (81.03% accuracy) |
+| `phase01_vision_cnn_trainer.py` (model trainer) | `phase01_vision_cnn_notebook.ipynb` (same architecture in notebook form) | `training_models_notebook_dump.txt` lines 937-1665 (complete FERPlus Kaggle retraining) |
+| `emotion_model.h5` / `face_emotion_model.h5` | `emotion_api/face_emotion_model.h5` (loaded by Phase 6 monolith) | `fer_best_model.keras` (loaded by Phase 9 `phase08_vision_api_preprod.py`) |
+| `phase01_diagnostic_gpu_check.py` (GPU check) | No direct descendant | Spiritual descendant: `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` in all Phase 9 services |
+| `phase01_vision_classification_report_root.txt` (57% accuracy) | No direct descendant | Replaced by Phase 9 FERPlus report (81.03% accuracy) |
