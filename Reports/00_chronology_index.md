@@ -6,7 +6,7 @@ Chronological ordering was determined by cross-referencing the following signals
 2. **Model file references**: Scripts referencing `face_emotion_model.h5` (48×48 input, Phase 1 CNN) predate scripts referencing `fer_best_model.keras` (112×112 input, Phase 4+ CNN).
 3. **Architectural complexity**: Desktop-only scripts (`sounddevice`, `keyboard`) predate FastAPI scripts. Monolithic FastAPI scripts predate separated microservices.
 4. **Label mapping evolution**: Early scripts use `LabelEncoder` with alphabetical sklearn ordering; later scripts use hardcoded `INT_TO_EMOTION` dicts that match specific training notebooks.
-5. **Filename versioning**: `phase02_audio_lstm_trainer.py` → `phase03_audio_live_vosk.py` → `phase03_audio_push_to_talk.py`; `phase04_text_bilstm_trainer.py` → `phase04_text_attention_tester.py` → `phase04_text_negation_engine.py`.
+5. **Filename versioning**: `v4.py` → `v5.py` → `v6.py`; `textemo.py` → `textemotion.py` → `textemotion_tf212.py` (now renamed to `phase02_audio_lstm_trainer.py` → `phase03_audio_live_vosk.py` → `phase03_audio_push_to_talk.py` and `phase04_text_bilstm_trainer.py` → `phase04_text_attention_tester.py` → `phase04_text_negation_engine.py` respectively).
 6. **Code patterns**: `model.predict()` → `model(tensor, training=False)` → `@tf.function` → TFLite `interpreter.invoke()`.
 7. **File naming conventions**: `2nd attempt *.txt` files explicitly declare themselves as second iterations of separated APIs.
 8. **Orchestrator versioning**: `phase09_fusion_orchestrator_v0.py` → `phase09_fusion_orchestrator_v1.py` → `phase09_fusion_orchestrator_v2.py` → `orchestrator_v3.py` (production).
@@ -155,10 +155,10 @@ Chronological ordering was determined by cross-referencing the following signals
 
 | File | Location | Role |
 |---|---|---|
-| `phase08_audio_api_preprod.py` | `services/audio_api/` | Production Audio API: TFLite, Z-score, `asyncio.to_thread()`, `soundfile` in-memory |
+| `main_audio.py` | `services/audio_api/` | Production Audio API: TFLite, Z-score, `asyncio.to_thread()`, `soundfile` in-memory |
 | `convert_audio_model.py` | `services/audio_api/` | Keras → TFLite converter with float16 quantization |
-| `phase08_vision_api_preprod.py` | `services/image_video_api/` | Production Vision API: `@tf.function` batch, FPS-aware decimation, MediaPipe Tasks 0.75 |
-| `phase08_text_api_preprod.py` | `services/text_api/` | Production Text API: `@tf.function`, `asyncio.to_thread()`, pre-compiled regex, dual-threshold |
+| `main_video.py` | `services/image_video_api/` | Production Vision API: `@tf.function` batch, FPS-aware decimation, MediaPipe Tasks 0.75 |
+| `main_text.py` | `services/text_api/` | Production Text API: `@tf.function`, `asyncio.to_thread()`, pre-compiled regex, dual-threshold |
 | `orchestrator_v3.py` | `services/fusion_api/` | Master Orchestrator: fusion, LLM, auth, DB, crisis/abuse gate, contradiction engine |
 | `database.py` | `services/fusion_api/` | Async SQLAlchemy ORM models |
 | `start_servers.bat` | `launch_scripts/` | Multi-service Windows launcher |

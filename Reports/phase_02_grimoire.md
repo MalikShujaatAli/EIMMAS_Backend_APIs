@@ -114,7 +114,7 @@ print("🎉 Model saved as speech_emotion_model_7.h5")
 - **What this solves**: Converting raw audio waveforms into fixed-size MFCC tensors.
 - **`librosa.load(file_path, res_type='kaiser_fast')`**: Loads audio and resamples to librosa's default 22050 Hz. The `res_type='kaiser_fast'` uses a fast but lower-quality resampling algorithm. In the Phase 9 Kaggle notebook, this is replaced by `librosa.load(file_path, sr=SAMPLE_RATE)` with `SAMPLE_RATE = 16000` (explicit 16kHz, which is optimal for speech) and the `res_type` parameter is dropped entirely (it caused crashes on newer Kaggle environments).
 - **No silence trimming**: Raw audio including leading/trailing silence is passed directly to MFCC extraction. This means 1-2 seconds of dead air at recording boundaries are encoded as zero-valued frequency bands, biasing the model toward predicting "neutral" for any input with quiet segments. Phase 9's `phase07_audio_api_standalone.txt` adds `librosa.effects.trim(audio, top_db=30)`.
-- **No normalization**: Raw MFCC values are used as-is. MFCC magnitudes vary with recording volume — a loud recording produces higher absolute MFCC values than a quiet one, regardless of emotional content. This causes the "False Angry" bias. Phase 9's `phase08_audio_api_preprod.py` adds Z-score normalization: `mfccs = (mfccs - mean) / std`.
+- **No normalization**: Raw MFCC values are used as-is. MFCC magnitudes vary with recording volume — a loud recording produces higher absolute MFCC values than a quiet one, regardless of emotional content. This causes the "False Angry" bias. Phase 9's `main_audio.py` adds Z-score normalization: `mfccs = (mfccs - mean) / std`.
 - **MFCC-only features**: Only 40 MFCC bands are extracted. The Phase 6 monolith (`phase06_fusion_api_monolith.py`) later experiments with stacking MFCC + delta + delta2 into 120 features per frame, but the Phase 9 production model reverts to MFCC-only (40 features) because the BiLSTM architecture captures temporal dynamics internally, making explicit delta features redundant.
 - **Return shape**: `mfccs` has shape `(40, 174)` — 40 frequency bands × 174 time frames. This is transposed before feeding to the LSTM (see Block 5).
 
@@ -164,7 +164,7 @@ print("🎉 Model saved as speech_emotion_model_7.h5")
 |---|---|---|
 | `phase02_audio_lstm_trainer.py` (trainer script) | Not directly reused; model file loaded by `phase03_audio_live_vosk.py`/`phase03_audio_push_to_talk.py` | `training_models_notebook_dump.txt` lines 2057-2400 (Kaggle BiLSTM retraining) |
 | `speech_emotion_model_7.h5` (model file) | Loaded by `phase03_audio_live_vosk.py`, `phase03_audio_push_to_talk.py` | Replaced by `audio_best_model.keras` → converted to `audio_model.tflite` |
-| `extract_features()` function | Reused nearly identically in `phase03_audio_live_vosk.py`/`phase03_audio_push_to_talk.py` | Replaced by `get_features_fast()` in `phase08_audio_api_preprod.py` (adds trimming, Z-score normalization, in-memory processing via soundfile) |
+| `extract_features()` function | Reused nearly identically in `phase03_audio_live_vosk.py`/`phase03_audio_push_to_talk.py` | Replaced by `get_features_fast()` in `main_audio.py` (adds trimming, Z-score normalization, in-memory processing via soundfile) |
 | `emotion_map` dictionary | Reused in `phase06_fusion_api_monolith.py` as `voice_labels_raw` | Replaced by `INT_TO_EMOTION` dict with integer keys |
 | `pd.get_dummies()` encoding | Not used in any descendant | Replaced by integer labels everywhere |
 

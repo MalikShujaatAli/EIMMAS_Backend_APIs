@@ -286,7 +286,7 @@ if __name__ == "__main__":
 - **CPU waste**: Even though skipped frames aren't processed, `cap.read()` still decodes every frame. The CPU decompresses all frames, then throws away 90% of them.
 - **`max(faces, key=lambda f: f[2] * f[3])`**: Selects the largest detected face by area (width × height). This is a reasonable heuristic — the largest face is likely the primary subject.
 - **Per-frame `predict_face_emotion()`**: Each processed frame triggers a separate `model.predict()` call. No batch accumulation.
-- **Phase 9 resolution**: `phase08_vision_api_preprod.py` uses `frame_mod = max(1, int(fps))` for FPS-aware decimation (exactly 1 frame/second), accumulates face tensors into a list, then batch-predicts with `compute_vision_inference(np.stack(face_tensors))`.
+- **Phase 9 resolution**: `main_video.py` uses `frame_mod = max(1, int(fps))` for FPS-aware decimation (exactly 1 frame/second), accumulates face tensors into a list, then batch-predicts with `compute_vision_inference(np.stack(face_tensors))`.
 
 #### Block 6: Probability Scaling (Lines 70, 106)
 - **Face: `raw * 0.55`**: Reduces all face probabilities by 45%.
@@ -371,10 +371,10 @@ exe = EXE(
 
 | Phase 6 Artifact | Immediate Descendant (Phase 7) | Phase 9 Descendant |
 |---|---|---|
-| `phase06_fusion_api_monolith.py` `/predict/image` | `phase07_vision_api_standalone.txt` `/predict/image` | `phase08_vision_api_preprod.py` `/predict/image` |
-| `phase06_fusion_api_monolith.py` `/predict/video` | `phase07_vision_api_standalone.txt` `/predict/video` | `phase08_vision_api_preprod.py` `/predict/video` |
-| `phase06_fusion_api_monolith.py` `/predict/voice` | `phase07_audio_api_standalone.txt` `/predict_audio` | `phase08_audio_api_preprod.py` `/predict_audio` |
-| No text endpoint | `phase07_text_api_standalone.txt` `/predict_text` | `phase08_text_api_preprod.py` `/predict_text` |
+| `phase06_fusion_api_monolith.py` `/predict/image` | `phase07_vision_api_standalone.txt` `/predict/image` | `main_video.py` `/predict/image` |
+| `phase06_fusion_api_monolith.py` `/predict/video` | `phase07_vision_api_standalone.txt` `/predict/video` | `main_video.py` `/predict/video` |
+| `phase06_fusion_api_monolith.py` `/predict/voice` | `phase07_audio_api_standalone.txt` `/predict_audio` | `main_audio.py` `/predict_audio` |
+| No text endpoint | `phase07_text_api_standalone.txt` `/predict_text` | `main_text.py` `/predict_text` |
 | No orchestrator | None | `orchestrator_v3.py` (fusion, LLM, auth, DB) |
 | `phase06_fusion_api_pyinstaller_spec.spec` (PyInstaller) | Abandoned | `start_servers.bat` (proper deployment) |
 | `merged_voice_label()` | Removed (7-class model) | `INT_TO_EMOTION` dict |

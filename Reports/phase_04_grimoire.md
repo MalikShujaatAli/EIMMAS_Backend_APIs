@@ -280,7 +280,7 @@ while True:
 #### Critical Artifacts
 
 - **First `AttentionLayer` appearance**: This is where the custom attention mechanism was born. The implementation uses `tf.tensordot` to compute attention scores, `tf.nn.softmax` for normalization, and `tf.reduce_sum` for weighted pooling. The weight shape is `(dim,)` — a 1D vector, making this a simplified "additive attention" variant.
-- **`AttentionLayer` evolution**: In `phase04_text_attention_tester.py`, the weight shape is `(dim,)` with `glorot_uniform` initializer. In `phase07_text_api_standalone.txt`, it becomes `(input_shape[-1], 1)` with `normal` initializer, and the computation changes to `K.tanh(K.dot(x, self.W) + self.b)` — a more standard Bahdanau-style attention. In Phase 9's `phase08_text_api_preprod.py`, the ops change to `keras.ops.tanh`/`ops.matmul`/`ops.softmax`/`ops.sum` for Keras 3 compatibility.
+- **`AttentionLayer` evolution**: In `phase04_text_attention_tester.py`, the weight shape is `(dim,)` with `glorot_uniform` initializer. In `phase07_text_api_standalone.txt`, it becomes `(input_shape[-1], 1)` with `normal` initializer, and the computation changes to `K.tanh(K.dot(x, self.W) + self.b)` — a more standard Bahdanau-style attention. In Phase 9's `main_text.py`, the ops change to `keras.ops.tanh`/`ops.matmul`/`ops.softmax`/`ops.sum` for Keras 3 compatibility.
 - **`glob.glob("trained_models/aa/...")`**: Dynamic model file discovery by sorting glob matches and taking the last (most recent) file. This was replaced by explicit path constants in all later phases.
 - **`PorterStemmer` — imported, never used**: `stemmer = PorterStemmer()` is defined on line 15 but `stemmer` is never called anywhere in the script. This is evidence of an abandoned NLP preprocessing step — the developer considered stemming words before tokenization but decided against it (likely because the tokenizer was trained on unstemmed text, so stemming at inference time would cause vocabulary mismatches).
 - **`maxlen=60`**: Different from `phase04_text_bilstm_trainer.py`'s 50 and `phase04_text_cnn_predictor.py`'s 100. This is the third distinct `maxlen` value, indicating that model retraining happened multiple times with different configurations.
@@ -492,7 +492,7 @@ while True:
 **Paragraph Voting System (Lines 145-180)**
 - `vote_counter`: Counts how many sentences predict each emotion. The paragraph's final emotion is the mode (most frequent vote).
 - `prob_accumulator`: Sums raw probabilities across sentences, then averages them.
-- This dual voting+averaging approach survives conceptually into Phase 9's `phase08_text_api_preprod.py` (probability accumulation + final emotion selection).
+- This dual voting+averaging approach survives conceptually into Phase 9's `main_text.py` (probability accumulation + final emotion selection).
 
 ---
 
@@ -514,7 +514,7 @@ These two scripts form the final evolution of Phase 4 before the unified APIs.
 
 ## Header 3: Micro-Decision Log
 
-| Decision | `phase04_text_bilstm_trainer.py` | `phase04_text_cnn_predictor.py` | `phase04_text_attention_tester.py` | `phase04_text_negation_engine.py` | Phase 9 (`phase08_text_api_preprod.py`) |
+| Decision | `phase04_text_bilstm_trainer.py` | `phase04_text_cnn_predictor.py` | `phase04_text_attention_tester.py` | `phase04_text_negation_engine.py` | Phase 9 (`main_text.py`) |
 |---|---|---|---|---|---|
 | Architecture | BiLSTM | CNN | BiLSTM+Attention | BiLSTM (model loaded) | BiLSTM+Attention |
 | `max_len` | 50 | 100 | 60 | 50 | 100 |
@@ -536,11 +536,11 @@ These two scripts form the final evolution of Phase 4 before the unified APIs.
 |---|---|---|
 | `phase04_text_bilstm_trainer.py` (trainer) | → Kaggle notebook (`training_models_notebook_dump.txt` lines 1-800) | Retrained with Attention, class weights, `max_len=100` |
 | `phase04_text_cnn_predictor.py` (CNN predictor) | → Abandoned | CNN architecture was not pursued; BiLSTM+Attention won |
-| `phase04_text_attention_tester.py` `AttentionLayer` | → `phase07_text_api_standalone.txt` → `phase08_text_api_preprod.py` | Evolved from `tf.tensordot` → `K.tanh/K.dot` → `ops.tanh/ops.matmul` |
+| `phase04_text_attention_tester.py` `AttentionLayer` | → `phase07_text_api_standalone.txt` → `main_text.py` | Evolved from `tf.tensordot` → `K.tanh/K.dot` → `ops.tanh/ops.matmul` |
 | `phase04_text_attention_tester.py` `PorterStemmer` | → Abandoned | Never used; removed silently |
 | `phase04_text_attention_tester.py` `glob.glob()` discovery | → Replaced by explicit paths | All Phase 7+ scripts use hardcoded model paths |
 | `phase04_text_negation_engine.py` `is_context_clear()` | → Removed entirely in Phase 9 | Replaced by dual-threshold confidence filter |
 | `phase04_text_negation_engine.py` `NEGATION_MAP` | → Removed entirely in Phase 9 | Model handles negation natively |
 | `phase04_text_negation_engine.py` `rewrite_sentence()` | → Removed entirely in Phase 9 | Model handles negation natively |
-| `phase04_text_negation_engine.py` vote counter | → `phase08_text_api_preprod.py` accumulator logic | Preserved conceptually |
-| `phase04_text_negation_engine_copy.py` | → Byte-identical copy; co-located for Phase 6 monolith | Replaced by `phase08_text_api_preprod.py` endpoint |
+| `phase04_text_negation_engine.py` vote counter | → `main_text.py` accumulator logic | Preserved conceptually |
+| `phase04_text_negation_engine_copy.py` | → Byte-identical copy; co-located for Phase 6 monolith | Replaced by `main_text.py` endpoint |

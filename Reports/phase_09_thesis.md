@@ -4,7 +4,7 @@
 Phase 9 was not an incremental upgrade — it was a complete re-architecture driven by a systematic audit of every remaining deficiency (documented in `problems to fix.txt`). The goal was to achieve a production-grade system that could handle concurrent mobile users without freezing, crashing, or leaking resources. Eight architectural loopholes were identified and methodically closed: event loop blocking, eager execution overhead, disk I/O bottlenecks, MFCC volume bias, video CPU saturation, NLTK cold-boot failures, database N+1 queries, and missing security controls.
 
 ## Scope & Boundaries
-Phase 9 produced four microservices (`phase08_audio_api_preprod.py`, `phase08_vision_api_preprod.py`, `phase08_text_api_preprod.py`, `orchestrator_v3.py`), a shared database module (`database.py`), a TFLite converter (`convert_audio_model.py`), an NLTK setup script (`setup_nltk.py`), and a multi-service Windows launcher (`start_servers.bat`). 
+Phase 9 produced four microservices (`main_audio.py`, `main_video.py`, `main_text.py`, `orchestrator_v3.py`), a shared database module (`database.py`), a TFLite converter (`convert_audio_model.py`), an NLTK setup script (`setup_nltk.py`), and a multi-service Windows launcher (`start_servers.bat`). 
 
 **The Orchestrator Evolution**: The orchestrator was not built instantly. It evolved through three distinct prototypes in this phase before reaching production:
 1. **`v0`**: A basic FastAPI wrapper calling Groq LLM with hardcoded keys and a raw `NamedTemporaryFile` audio extractor.

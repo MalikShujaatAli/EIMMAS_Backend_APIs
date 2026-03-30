@@ -8,14 +8,14 @@ This document traces the complete lineage of every function, class, configuratio
 
 | Entity | Born | Mutated | Died | Resurrected | Final Form (Phase 9) |
 |---|---|---|---|---|---|
-| `preprocess_face()` | P3 (`phase03_vision_webcam_scaled.py`) | P6 (axis shorthand), P7 (CLAHE+112×112+CUBIC) | — | — | `phase08_vision_api_preprod.py:preprocess_face()` |
+| `preprocess_face()` | P3 (`phase03_vision_webcam_scaled.py`) | P6 (axis shorthand), P7 (CLAHE+112×112+CUBIC) | — | — | `main_video.py:preprocess_face()` |
 | `predict_face_emotion()` | P3 (`phase03_vision_webcam_scaled.py`) | P6 (×0.55 scaling), P7 (scaling removed) | — | — | Inlined into batch prediction loop |
 | `get_emotion_scores()` | P3 (`phase03_vision_webcam_scaled.py`) | — | P6 (renamed to `predict_face_emotion`) | — | — |
-| `extract_features()` (audio) | P2 (`phase02_audio_lstm_trainer.py`) | P3 (added `.T` transpose), P6 (added delta stacking → renamed `extract_audio_features`) | P7 (renamed `process_audio`, deltas removed) | — | `phase08_audio_api_preprod.py:get_features_fast()` |
+| `extract_features()` (audio) | P2 (`phase02_audio_lstm_trainer.py`) | P3 (added `.T` transpose), P6 (added delta stacking → renamed `extract_audio_features`) | P7 (renamed `process_audio`, deltas removed) | — | `main_audio.py:get_features_fast()` |
 | `predict_emotion()` (audio) | P3 (`phase03_audio_live_vosk.py`) | P3/`phase03_audio_push_to_talk.py` (added sorted confidence printout) | P6 (renamed `predict_voice_emotion`) | — | TFLite `_predict_tflite()` |
 | `heartbeat_bar()` | P3 (`phase03_audio_live_vosk.py`) | P3/`phase03_audio_push_to_talk.py` (identical) | P6 (no terminal UI in API) | Never | — |
 | `merged_voice_label()` | P6 (`phase06_fusion_api_monolith.py`) | — | P7 (7-class model, merge at training time) | Never | — |
-| `AttentionLayer` | P4 (`phase04_text_attention_tester.py`) | P4/`phase04_text_negation_engine.py` (identical copy), P7 (`K.tanh`/`K.dot`, shape change) | — | — | `phase08_text_api_preprod.py` (`ops.tanh`/`ops.matmul`, Keras 3) |
+| `AttentionLayer` | P4 (`phase04_text_attention_tester.py`) | P4/`phase04_text_negation_engine.py` (identical copy), P7 (`K.tanh`/`K.dot`, shape change) | — | — | `main_text.py` (`ops.tanh`/`ops.matmul`, Keras 3) |
 | `is_context_clear()` | P4 (`phase04_text_negation_engine.py`) | — | P4 (`phase04_text_api_bilstm_keyword.py`, replaced by `sentence_has_emotion`) | Never | — |
 | `rewrite_sentence()` | P4 (`phase04_text_negation_engine.py`) | — | P7 (removed entirely) | Never | — |
 | `NEGATION_MAP` | P4 (`phase04_text_negation_engine.py`) | — | P7 (removed entirely) | Never | — |
@@ -24,8 +24,8 @@ This document traces the complete lineage of every function, class, configuratio
 | `predict_emotion()` (text) | P4 (`phase04_text_negation_engine.py`) | P4/`phase04_text_cnn_predictor.py` (CNN version) | — | — | `compute_inference()` `@tf.function` |
 | `predict()` (text simple) | P4 (`phase04_text_attention_tester.py`) | P4 (`phase04_text_bilstm_attention_v1.py`, batch support) | P4/`phase04_text_negation_engine.py` (expanded version) | — | — |
 | `extract_largest_face()` | P7 (`phase07_vision_api_standalone.txt`) | — | — | — | Inlined with MediaPipe Tasks API |
-| `compute_vision_inference()` | P8 (`phase08_vision_api_preprod.py`) | — | — | — | Current (born in P8) |
-| `compute_inference()` (text) | P8 (`phase08_text_api_preprod.py`) | — | — | — | Current (born in P8) |
+| `compute_vision_inference()` | P9 (`main_video.py`) | — | — | — | Current (born in P9) |
+| `compute_inference()` (text) | P9 (`main_text.py`) | — | — | — | Current (born in P9) |
 | `fuse_emotions()` | P9 (`orchestrator_v3.py`) | — | — | — | Current (born in P9) |
 | `_extract_audio_from_video()` | P9 (`orchestrator_v3.py`) | — | — | — | Current (born in P9) |
 

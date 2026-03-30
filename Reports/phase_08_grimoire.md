@@ -22,7 +22,7 @@ Phase 8 represents the critical bridge between the "2nd attempt" separated APIs 
 
 ### `phase08_audio_api_preprod.py` — What changed from Phase 7
 
-| Feature | Phase 7 (`phase07_audio_api_standalone.txt`) | Phase 8 (`phase08_audio_api_preprod.py`) | Phase 9 (`services/audio_api/phase08_audio_api_preprod.py`) |
+| Feature | Phase 7 (`phase07_audio_api_standalone.txt`) | Phase 8 (`phase08_audio_api_preprod.py`) | Phase 9 (`services/audio_api/main_audio.py`) |
 |---|---|---|---|
 | Audio I/O | `NamedTemporaryFile` → `librosa.load(path)` | `soundfile.read(BytesIO(bytes))` — **zero disk** | Same as 7.5 |
 | Inference method | `model.predict(tensor, verbose=0)` | `model(tensor, training=False)` — **direct TF call** | TFLite `interpreter.invoke()` |
@@ -35,7 +35,7 @@ Phase 8 represents the critical bridge between the "2nd attempt" separated APIs 
 
 ### `phase08_vision_api_preprod.py` — What changed from Phase 7
 
-| Feature | Phase 7 (`phase07_vision_api_standalone.txt`) | Phase 8 (`phase08_vision_api_preprod.py`) | Phase 9 (`services/image_video_api/phase08_vision_api_preprod.py`) |
+| Feature | Phase 7 (`phase07_vision_api_standalone.txt`) | Phase 8 (`phase08_vision_api_preprod.py`) | Phase 9 (`services/image_video_api/main_video.py`) |
 |---|---|---|---|
 | Face detector API | `mp.solutions.face_detection` (legacy) | `mediapipe.tasks.vision.FaceDetector` (Tasks API) | Same as 7.5 |
 | Model download | Manual placement | `urllib.request.urlretrieve(MP_MODEL_URL)` — **auto-download** | Same |
@@ -49,7 +49,7 @@ Phase 8 represents the critical bridge between the "2nd attempt" separated APIs 
 
 ### `phase08_text_api_preprod.py` — What changed from Phase 7
 
-| Feature | Phase 7 (`phase07_text_api_standalone.txt`) | Phase 8 (`phase08_text_api_preprod.py`) | Phase 9 (`services/text_api/phase08_text_api_preprod.py`) |
+| Feature | Phase 7 (`phase07_text_api_standalone.txt`) | Phase 8 (`phase08_text_api_preprod.py`) | Phase 9 (`services/text_api/main_text.py`) |
 |---|---|---|---|
 | Attention ops | `K.tanh`/`K.dot`/`K.softmax`/`K.sum` | `ops.tanh`/`ops.matmul`/`ops.softmax`/`ops.sum` — **Keras 3!** | Same as 7.5 |
 | Serialization | `@tf.keras.utils.register_keras_serializable()` | `@keras.saving.register_keras_serializable(package="Custom", name="AttentionLayer")` — **explicit package** | Same as 7.5 |
@@ -92,7 +92,7 @@ This confirms that `phase08_text_api_intermediate.py` was written BEFORE `phase0
 - **Role**: The **first text emotion FastAPI endpoint** — the missing bridge between Phase 4's desktop scripts and Phase 7's `phase07_text_api_standalone.txt`.
 - **Key innovation — `rawemotionwords` list**: A massive 150+ word set covering sadness, fear, disgust, surprise, stress, psychological states, and social/relational cues. The `sentence_has_emotion()` function checks if ANY word in the sentence appears in this set before running the model.
 - **Why this replaced `is_context_clear()`**: Instead of Phase 4's rigid rules (word count, character ratio, keyword presence), `phase04_text_api_bilstm_keyword.py` uses a much larger vocabulary of emotion-related words. If none of the 150+ words appear, the sentence is marked "context unclear" without running inference. This is more permissive than `is_context_clear()` but still fundamentally a keyword-matching approach.
-- **Why this was ALSO abandoned**: The Phase 9 production `phase08_text_api_preprod.py` removes the keyword check entirely, relying purely on model confidence (dual-threshold). The model's softmax output is a better indicator of emotional content than any keyword list.
+- **Why this was ALSO abandoned**: The Phase 9 production `main_text.py` removes the keyword check entirely, relying purely on model confidence (dual-threshold). The model's softmax output is a better indicator of emotional content than any keyword list.
 - **Port 8001**: Same as Phase 7 and Phase 9 text APIs, confirming the lineage.
 
 ---

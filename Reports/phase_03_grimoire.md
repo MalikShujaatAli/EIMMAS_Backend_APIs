@@ -128,14 +128,14 @@ cv2.destroyAllWindows()
 - **What this solves**: Loading the Phase 1 CNN model for real-time inference.
 - **`face_emotion_model.h5`**: This is the 48×48 CNN from Phase 1 (or the `cnn model/` notebook), NOT the later 112×112 FERPlus model.
 - **Label ordering**: Title-case, manually ordered as `['Angry','Disgust','Fear','Happy','Sad','Surprise','Neutral']`. This ordering does NOT match sklearn's alphabetical convention (which would put Neutral before Sad). This is a hardcoded assumption about the training label order. If the training used `flow_from_directory` (which sorts alphabetically), the correct order would be `['Angry','Disgust','Fear','Happy','Neutral','Sad','Surprise']`. This potential mismatch was a latent bug.
-- **Phase 9 resolution**: `phase08_vision_api_preprod.py` uses `INT_TO_EMOTION = {0:'angry', 1:'disgust', 2:'fear', 3:'happy', 4:'neutral', 5:'sad', 6:'surprise'}` which is explicitly alphabetical and matches the Kaggle training notebook's `sorted(os.listdir())` ordering.
+- **Phase 9 resolution**: `main_video.py` uses `INT_TO_EMOTION = {0:'angry', 1:'disgust', 2:'fear', 3:'happy', 4:'neutral', 5:'sad', 6:'surprise'}` which is explicitly alphabetical and matches the Kaggle training notebook's `sorted(os.listdir())` ordering.
 
 #### Block 2: Haar Cascade (Lines 14-16)
 - **What this solves**: Face detection — locating the rectangular region of an image containing a face.
 - **`haarcascade_frontalface_default.xml`**: An ancient (2001) machine learning algorithm based on Haar-like features and Adaboost cascade classifiers. It runs fast but has high false-positive rates.
 - **Logical flaw — False positives**: Haar cascades detect patterns of light/dark regions characteristic of faces, but similar patterns appear in textured wallpaper, electrical outlets, pet faces, and book covers. Every false detection sends garbage pixel data into the emotion model, producing random predictions that undermine user trust.
 - **Phase 7 replacement**: `phase07_vision_api_standalone.txt` replaces Haar with `mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.6)`.
-- **Phase 9 replacement**: `phase08_vision_api_preprod.py` uses the MediaPipe Tasks Vision API (`vision.FaceDetector`) with `min_detection_confidence=0.75`.
+- **Phase 9 replacement**: `main_video.py` uses the MediaPipe Tasks Vision API (`vision.FaceDetector`) with `min_detection_confidence=0.75`.
 
 #### Block 3: Preprocessing (Lines 21-26)
 - **`cv2.resize(gray_face, (48, 48))`**: Matches the Phase 1 CNN's input size. No CLAHE, no INTER_CUBIC interpolation (uses default bilinear).
@@ -485,8 +485,8 @@ with sd.RawInputStream(
 
 | Phase 3 Concept | Phase 9 Descendant |
 |---|---|
-| `extract_features()` (MFCC extraction + pad/truncate) | `get_features_fast()` in `phase08_audio_api_preprod.py` |
-| `preprocess_face()` (resize + normalize + reshape) | `preprocess_face()` in `phase08_vision_api_preprod.py` (112×112, CLAHE added) |
+| `extract_features()` (MFCC extraction + pad/truncate) | `get_features_fast()` in `main_audio.py` |
+| `preprocess_face()` (resize + normalize + reshape) | `preprocess_face()` in `main_video.py` (112×112, CLAHE added) |
 | `model.predict(features)` | `compute_vision_inference(tensor)` / `compute_inference(tensor)` (`@tf.function` compiled) |
 | `MIN_SPEECH_VOLUME` threshold | `CONFIDENCE_THRESHOLD` on prediction output |
 | `full_audio → np.concatenate → predict` | `file_bytes → soundfile.read → get_features_fast → predict` |

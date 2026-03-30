@@ -191,6 +191,6 @@ Phase 1 is the genesis — there is no previous phase to diff against. The follo
 | Phase 1 Artifact | Immediate Descendant | Ultimate Descendant (Phase 9) |
 |---|---|---|
 | `phase01_vision_cnn_trainer.py` (model trainer) | `phase01_vision_cnn_notebook.ipynb` (same architecture in notebook form) | `training_models_notebook_dump.txt` lines 937-1665 (complete FERPlus Kaggle retraining) |
-| `emotion_model.h5` / `face_emotion_model.h5` | `emotion_api/face_emotion_model.h5` (loaded by Phase 6 monolith) | `fer_best_model.keras` (loaded by Phase 9 `phase08_vision_api_preprod.py`) |
+| `emotion_model.h5` / `face_emotion_model.h5` | `emotion_api/face_emotion_model.h5` (loaded by Phase 6 monolith) | `fer_best_model.keras` (loaded by Phase 9 `main_video.py`) |
 | `phase01_diagnostic_gpu_check.py` (GPU check) | No direct descendant | Spiritual descendant: `os.environ["CUDA_VISIBLE_DEVICES"] = "-1"` in all Phase 9 services |
 | `phase01_vision_classification_report_root.txt` (57% accuracy) | No direct descendant | Replaced by Phase 9 FERPlus report (81.03% accuracy) |

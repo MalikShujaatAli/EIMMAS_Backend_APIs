@@ -6,10 +6,10 @@
 
 | File | Location | Role |
 |---|---|---|
-| `phase08_audio_api_preprod.py` | `services/audio_api/` | Production Audio Emotion API |
+| `main_audio.py` | `services/audio_api/` | Production Audio Emotion API |
 | `convert_audio_model.py` | `services/audio_api/` | Keras → TFLite converter |
-| `phase08_vision_api_preprod.py` | `services/image_video_api/` | Production Vision Emotion API |
-| `phase08_text_api_preprod.py` | `services/text_api/` | Production Text Emotion API |
+| `main_video.py` | `services/image_video_api/` | Production Vision Emotion API |
+| `main_text.py` | `services/text_api/` | Production Text Emotion API |
 | `orchestrator_v3.py` | `services/fusion_api/` | Master Orchestrator: fusion, LLM, auth, DB |
 | `database.py` | `services/fusion_api/` | Async SQLAlchemy ORM models |
 | `start_servers.bat` | `launch_scripts/` | Multi-service Windows launcher |
@@ -23,7 +23,7 @@ Due to the scale of Phase 9 files (235+ lines each, orchestrator at 651 lines), 
 
 ---
 
-### Service 1: `phase08_audio_api_preprod.py` — 8 Evolutionary Leaps
+### Service 1: `main_audio.py` (services/audio_api/) — 8 Evolutionary Leaps
 
 #### Leap 1: TFLite Primary Inference (Replaces Phase 2-7 `model.predict`)
 ```python
@@ -89,7 +89,7 @@ logging.basicConfig(
 
 ---
 
-### Service 2: `phase08_vision_api_preprod.py` — 6 Evolutionary Leaps
+### Service 2: `main_video.py` (services/image_video_api/) — 6 Evolutionary Leaps
 
 #### Leap 1: MediaPipe Tasks Vision API (Replaces Phase 7 `mp.solutions`)
 ```python
@@ -166,7 +166,7 @@ finally:
 
 ---
 
-### Service 3: `phase08_text_api_preprod.py` — 5 Evolutionary Leaps
+### Service 3: `main_text.py` (services/text_api/) — 5 Evolutionary Leaps
 
 #### Leap 1: Keras 3 Ops (Replaces Phase 7 `K.*` backend ops)
 ```python
@@ -402,7 +402,7 @@ response_data["show_emotion_ui"] = True if detected_emotion else False
 | Database | None | Async SQLAlchemy + aiosqlite | New component |
 | Crisis detection | None | Pre-compiled regex gate | New component |
 | Contradiction engine | None | Affective masking detection | New component |
-| Deployment | Manual `python phase06_fusion_api_monolith.py` | `start_servers.bat` with 4 workers each | Infrastructure addition |
+| Deployment | Manual `python phase06_fusion_api_monolith.py` | `start_servers.bat` multi-service launcher | Infrastructure addition |
 
 ---
 
