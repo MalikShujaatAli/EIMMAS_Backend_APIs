@@ -96,25 +96,28 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Master Extraction & Fusion Orchestrator API - Enterprise Edition", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 # ---------------------------------------------------------
-# SAFETY & BLOCKADE CONFIGURATIONS (REGEX 2.0)
+# SAFETY & BLOCKADE CONFIGURATIONS (FALLBACK REGEX ARRAY)
 # ---------------------------------------------------------
-import re
-
-# These patterns use \b (word boundaries) and .*? (wildcards) to catch 
-# typos, bad grammar, and separated phrases (e.g., "I want to completely end everything")
+# These patterns serve as the 'Hard Defense' if the LLM is unreachable.
 CRISIS_PATTERNS = [
     r"\b(kill|end|destroy|hurt|harm)\b.*?\b(myself|me|my life|it all|everything)\b",
     r"\b(want|wanna|wish|going to|gonna)\b.*?\b(die|suicide|disappear|sleep forever)\b",
     r"\b(no point|no reason|tired|can't do this)\b.*?\b(living|life|trying|anymore)\b",
     r"\b(give up|giving up)\b.*?\b(on life|everything)\b",
-    r"\b(don't|do not|never)\b.*?\b(wake up|waking up)\b",  # Caught: "don't want to wake up tomorrow"
-    r"\b(don't|do not)\b.*?\b(alive|living)\b.*?\b(myself|me)\b" # Caught: "see him alive or myself"
+    r"\b(don't|do not|never)\b.*?\b(wake up|waking up)\b",
+    r"\b(don't|do not)\b.*?\b(alive|living)\b.*?\b(myself|me)\b"
 ]
 
 ABUSIVE_PATTERNS = [
     r"\b(bsdk|loru|bitch|mc|bc|chutiya|fuck|fck|f\*\*k|asshole)\b",
     r"\b(shut up|fuck off|die bot)\b"
 ]
+
+NON_ENGLISH_PATTERNS = [
+    r"\b(hai|kya|nahi|mujhe|mera|meri|kaise|kese|karna|karo|apna|apni|kuch|kabhi|abhi|aisa|waisa|theek|acha|achi|bohat|kaha|yaha|waha|kisi|liye|wala|wali|batao|suno|tumhara|hamara|kyun|kaun|kaam)\b",
+    r"[\u0600-\u06FF\u0750-\u077F]"
+]
+
 # ---------------------------------------------------------
 # 4. AUTHENTICATION (ENTERPRISE-GRADE JWT VERIFICATION)
 # ---------------------------------------------------------
@@ -455,6 +458,45 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
         }
         return fallback_responses.get(fused_emotion.lower(), fallback_responses["neutral"])
     
+async def perform_preflight_check(text: str) -> str:
+    """
+    Ultra-fast LLM classifier to detect non-English, suicide/crisis, or abuse.
+    Returns exactly one word: 'abuse', 'critical', 'non_english', or 'safe'.
+    """
+    if not text or len(text.strip()) < 2:
+        return "safe"
+
+    try:
+        # Using the fastest available model (Llama 3.1 8B) for 200ms latency
+        response = await groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": "Classify text into exactly one word: 'abuse', 'critical', 'non_english', or 'safe'. 'critical' is for suicide/self-harm. 'non_english' includes any language other than English. Respond only with the word."},
+                {"role": "user", "content": text}
+            ],
+            temperature=0.0,
+            max_tokens=10
+        )
+        result = response.choices[0].message.content.strip().lower()
+        # Clean up any stray punctuation or extra words
+        for word in ['safe', 'abuse', 'critical', 'non_english']:
+            if word in result:
+                return word
+        return "safe"
+    except Exception as e:
+        logger.error(f"Pre-flight check failed: {e}. Falling back to Regex Blockade.")
+        
+        # SECOND LAYER OF DEFENSE: Regex Backup
+        text_lower = text.lower()
+        if any(re.search(pat, text_lower) for pat in ABUSIVE_PATTERNS):
+            return "abuse"
+        if any(re.search(pat, text_lower) for pat in CRISIS_PATTERNS):
+            return "critical"
+        if any(re.search(pat, text_lower) for pat in NON_ENGLISH_PATTERNS):
+            return "non_english"
+            
+        return "safe" # Final fallback if LLM is down AND no obvious regex flags.
+
 # ---------------------------------------------------------
 # 7. THE MASTER ENDPOINTS
 # ---------------------------------------------------------
@@ -519,13 +561,14 @@ async def analyze_multimodal(
         raw_api_data = {}
 
         if text:
-            text_lower = text.lower()
-            # Check for abuse or crisis using Semantic Patterns
-            if any(re.search(pat, text_lower) for pat in CRISIS_PATTERNS + ABUSIVE_PATTERNS):
-                logger.warning("SAFETY BLOCKADE TRIGGERED: Bypassing ML Models.")
+            # NEW: LLM Pre-Flight Check (Replaces Regex)
+            preflight_status = await perform_preflight_check(text)
+            
+            if preflight_status != "safe":
+                logger.warning(f"SAFETY BLOCKADE TRIGGERED: {preflight_status.upper()}. Bypassing ML Models.")
                 is_critical_override = True
                 fused_emotion = "high_alert"
-                raw_api_data = {"system": "Blocked by Safety Pre-Flight."}
+                raw_api_data = {"system": f"Blocked by LLM Pre-Flight: {preflight_status}"}
 
         # ---------------------------------------------------------
         # 3. Parallel API Processing (ONLY IF SAFE)
