@@ -49,19 +49,30 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------
 # 2. CONFIGURATIONS & MODEL SETUP
 # ---------------------------------------------------------
-FACE_MODEL_PATH = "fer_best_model.keras"
-ZIPPED_MODEL_PATH = "fer_best_model.keras.zip"
+
+# 🟢 TOGGLE THIS SWITCH: True = New Model, False = Old Baseline Model
+USE_NEW_DIVERSE_MODEL = True
+
+if USE_NEW_DIVERSE_MODEL:
+    FACE_MODEL_PATH = "fer_best_model_v2_diverse.keras"
+    ZIPPED_MODEL_PATH = "fer_best_model_v2_diverse.keras.zip"
+    logger.info("Configuration: Using NEW Diverse/Beard-Resistant Model")
+else:
+    FACE_MODEL_PATH = "fer_best_model.keras"
+    ZIPPED_MODEL_PATH = "fer_best_model.keras.zip"
+    logger.info("Configuration: Using OLD Baseline Model")
+
+
 MP_MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite"
 MP_MODEL_PATH = "face_detector.tflite"
 EMOTION_LABELS = ['angry', 'disgust', 'fearful', 'happy', 'neutral', 'sad', 'surprised']
 clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
 
-# Auto-download MediaPipe detector model if missing
+# ✅ THE FIX: Restored the MediaPipe Face Detector Initialization
 if not os.path.exists(MP_MODEL_PATH):
     logger.info("Downloading MediaPipe Face Detector model...")
     urllib.request.urlretrieve(MP_MODEL_URL, MP_MODEL_PATH)
 
-# --- STRICTER DETECTION SETTINGS ---
 base_options = python.BaseOptions(model_asset_path=MP_MODEL_PATH)
 options = vision.FaceDetectorOptions(
     base_options=base_options,
