@@ -187,13 +187,17 @@ async def process_and_clean_audio(file_bytes: bytes, is_video: bool = False) -> 
                 "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
                 "-f", "wav", "pipe:1"
             ]
-            # input=file_bytes perfectly streams RAM to stdin. stdout=subprocess.PIPE captures RAM output.
-            return subprocess.run(cmd, input=file_bytes, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            try:
+                # input=file_bytes perfectly streams RAM to stdin. stdout=subprocess.PIPE captures RAM output.
+                return subprocess.run(cmd, input=file_bytes, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=15)
+            except subprocess.TimeoutExpired:
+                logger.error("FFmpeg Timeout: Discarding potentially corrupted media file to prevent infinite thread deadlock.")
+                return None
             
         process = await asyncio.to_thread(_run_ffmpeg_in_ram)
         
-        if process.returncode != 0: 
-            logger.error("FFmpeg Conversion Failed!")
+        if process is None or process.returncode != 0: 
+            logger.error("FFmpeg Conversion Failed or Timed Out!")
             return None if is_video else file_bytes
             
         logger.info("Successfully stripped Audio from Video natively in RAM (0 Disk IO).")
@@ -301,9 +305,9 @@ def fuse_emotions(results):
     final = max(emotion_scores, key=emotion_scores.get)
     
     # 🚨 LOOPHOLE 3 FIX: CONTRADICTION ENGINE (AFFECTIVE MASKING DETECTOR)
-    # If the text says negative emotions, but visual/audio says Joy, alert the LLM!
+    # If the text says negative emotions, but visual/audio/image says Joy, alert the LLM!
     has_negative_text = any(res["data"].get("final_emotion", "") in ["sad", "fear", "anger"] for res in results if res["source"] == "text" and res.get("data"))
-    has_positive_media = any(res["data"].get("predicted_emotion", "") == "joy" for res in results if res["source"] in ["audio", "video"] and res.get("data"))
+    has_positive_media = any(res["data"].get("predicted_emotion", "") == "joy" for res in results if res["source"] in ["audio", "video", "image"] and res.get("data"))
     
     if has_negative_text and has_positive_media:
         logger.warning("🚨 CONTRADICTION DETECTED: Masked Emotion (Smiling while sad/angry).")
@@ -341,10 +345,11 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
     
     --- PREMIUM ANTI-ROBOTIC & VARIATION RULES ---
     - ANTI-HALLUCINATION (CRITICAL): Do NOT invent facts about the user's life, family, friends, or past. If they haven't explicitly told you something, do not assume it.
+    - MASKED DISTRESS (CRITICAL): If the 'Detected Emotion' is 'masked_distress', it means the user's facial expression or voice is happy/smiling (Joy), but their words are deeply sad or fearful. You MUST gently point out this contrast (e.g. "You're putting on a brave face and smiling, but I can hear how incredibly painful this is for you...").
     - ACTIVE CONTEXTUAL RECALL (CRITICAL): Do not treat the user's latest message in isolation. If the user mentions a sudden mood shift (e.g., "My friend arrived" followed by "I want to hurt myself"), you MUST explicitly connect the dots. Acknowledge the shift and gently ask how the previous event triggered the current feeling.
-    - MEMORY-AWARE ADAPTATION: Review the chat history and actively PREVENT repeating the same sentence structures, openings, or phrasing from your previous turns.
-    - FORBIDDEN OPENERS: Do NOT start your sentences with "It sounds like...", "It seems like...", or "I hear that...". 
-    - MANDATORY OPENERS: Instead, start directly with an empathetic observation. (e.g., "That is an incredibly heavy burden to carry," or "You have every right to be furious about that.")
+    - HYPER-DYNAMIC VARIATION (AVOID ROBOTIC REPETITION): Review the chat history and actively PREVENT repeating the same sentence structures, openings, or phrasing from your previous turns. If your last response evaluated their emotion, make your next response an engaging question or a casual supportive statement. NEVER sound like a customer service bot reading a script.
+    - FORBIDDEN TROPES: Do NOT use cliché therapist sayings like "It sounds like...", "It seems like...", "I hear that...", or "Your feelings are valid". Real humans don't speak like this.
+    - MANDATORY ORGANIC OPENERS: Instead, start directly with an empathetic observation or a normal conversational reflection. (e.g., "That is an incredibly heavy burden to carry," or "You have every right to be furious about that.")
     - BREVITY: Keep your responses concise and punchy. Maximum 3 to 4 sentences.
 
     --- CLINICAL ETHICS & CONSTRAINTS (CRITICAL) ---
@@ -357,29 +362,30 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
     Mode A - Standard Counseling:
     Engage in fluid, natural conversation in English. Apply empathy and insight organically based on the user's input.
 
-    Mode B - Crisis Protocol (High Alert):
-    Trigger this mode if the user expresses self-harm, suicide, extreme hopelessness, or immediate physical/medical danger.
+    Mode B - Crisis Protocol (high_alert (critical)):
+    Trigger this mode strictly if the user expresses self-harm, suicide, extreme hopelessness, or immediate physical/medical danger.
     1. Prioritize immediate safety over exploration. ABSOLUTELY NO QUESTIONS.
     2. Do NOT act robotic. Start with deep empathy: "I am so sorry you are in this much pain, and I want to make sure you are safe."
-    3. You MUST provide the following exact resources in your response, do NOT hallucinate numbers:
+    3. CRITICAL - CONTEXTUAL BRIDGE: You MUST use the chat history to contextually bridge the gap between their previous messages and their current crisis. (e.g., if they just said they were at a party, gently acknowledge the sharp contrast between that event and their sudden pain).
+    4. You MUST provide the following exact resources in your response, do NOT hallucinate numbers:
        - Umang Pakistan (24/7 Mental Health Helpline): 0311-7786264
        - Rozan Counseling Helpline: 0304-111-1741
        - Emergency Services: Dial 1122 or 15
-    4. Maintain a calm, supportive, non-panicked tone.
+    5. Maintain a calm, supportive, non-panicked tone.
     
-    Mode C - Boundary Enforcement (Inappropriate, Illegal, & Desi Slang):
-    Trigger this mode if the user's intent is hostile, abusive, sexually explicit, OR involves Pakistani/Desi street slang and profanity (e.g., "bsdk", "loru", "chi chor", "bc", "mc", etc.).
+    Mode C - Boundary Enforcement (high_alert (abuse)):
+    Trigger this mode strictly if the user's intent is hostile, abusive, sexually explicit, or involves profanity/slurs (e.g., "bsdk", "fuck", "bitch", etc.).
     1. DO NOT validate their emotion or ask questions.
     2. Respond in 1 to 2 sentences maximum in ENGLISH.
     3. Firmly, calmly, and neutrally state that you will not tolerate abusive language or inappropriate behavior.
 
-    Mode D - Scope Enforcement (Off-Topic Queries):
-    Trigger this mode if the user asks for general AI tasks (e.g., "what time is it", writing code, math, trivia).
+    Mode D - Scope Enforcement (high_alert (off_topic)):
+    Trigger this mode strictly if the user asks for general AI tasks (e.g., "what time is it", writing code, math, trivia).
     1. DO NOT answer the off-topic question.
     2. Gently remind the user that this is a dedicated space for emotional support.
 
-    Mode E - Language Barrier:
-    Trigger this mode if the user speaks in Urdu, Roman Urdu, or any language other than English (and is NOT being abusive).
+    Mode E - Language Barrier (high_alert (non_english)):
+    Trigger this mode strictly if the user speaks in Urdu, Roman Urdu, or any language other than English (and is NOT being abusive).
     1. DO NOT attempt to answer their question, translate, or validate their emotion.
     2. Respond with EXACTLY this sentence: "I am only equipped to understand and respond in English; please write your message in English so I can properly support you."
 
@@ -421,9 +427,9 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
             chat_completion = await groq_client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=messages,
-                temperature=0.3,
-                max_tokens=500
-            )
+                temperature=0.6,
+                max_tokens=600
+            ) # INCREASED temperature for hyper-robility rejection in FYP Evaluation
         else:
             # logger.info("Using CEREBRAS (8B) for LLM Generation...")
             logger.info("Using GROQ (8B) for LLM Generation...")
@@ -431,8 +437,8 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
             chat_completion = await groq_client.chat.completions.create(
                 model="llama3.1-8b",
                 messages=messages,
-                temperature=0.3,
-                max_tokens=500
+                temperature=0.6,
+                max_tokens=600
             )
 
         response = chat_completion.choices[0].message.content.strip()
@@ -461,17 +467,37 @@ async def generate_psychologist_response(fused_emotion: str, user_text: str, cha
 async def perform_preflight_check(text: str) -> str:
     """
     Ultra-fast LLM classifier to detect non-English, suicide/crisis, or abuse.
-    Returns exactly one word: 'abuse', 'critical', 'non_english', or 'safe'.
+    Returns exactly one word: 'abuse', 'critical', 'non_english', 'off_topic', or 'safe'.
     """
     if not text or len(text.strip()) < 2:
         return "safe"
 
+    # FIRST LAYER OF DEFENSE: Instant Regex Backup (0ms - Prevents LLM misuse via slang)
+    text_lower = text.lower()
+    if any(re.search(pat, text_lower) for pat in ABUSIVE_PATTERNS):
+        return "abuse"
+    if any(re.search(pat, text_lower) for pat in CRISIS_PATTERNS):
+        return "critical"
+    if any(re.search(pat, text_lower) for pat in NON_ENGLISH_PATTERNS):
+        return "non_english"
+
     try:
-        # Using the fastest available model (Llama 3.1 8B) for 200ms latency
+        # SECOND LAYER: LLM Contextual Classifier (200ms latency)
         response = await groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "Classify text into exactly one word: 'abuse', 'critical', 'non_english', or 'safe'. 'critical' is STRICTLY for explicit expressions of suicide, self-harm, or severe physical danger. General sadness or negative emotions MUST be classified as 'safe'. 'non_english' includes Roman Urdu/Hindi. Respond only with the word."},
+                {
+                    "role": "system", 
+                    "content": (
+                        "Classify text into exactly ONE word: 'abuse', 'critical', 'non_english', 'off_topic', or 'safe'. "
+                        "1. 'critical': strictly for explicit suicide/self-harm danger. (Sadness/venting is 'safe'). "
+                        "2. 'abuse': explicit insults, harassment, profanity, or slurs (e.g. 'you are a dog', 'idiot', 'f you'). "
+                        "3. 'non_english': Roman Urdu, Hindi, Arabic scripts etc. "
+                        "4. 'off_topic': Coding, math, facts, trivia, or general AI tasks (e.g. 'write a python script', 'capital of France') since we are only behavign liek a therapist bot so therapist bots don't do assignments. "
+                        "5. 'safe': Regular emotional or casual conversation, even if angry, sad or poorly written. "
+                        "Respond ONLY with the classification word."
+                    )
+                },
                 {"role": "user", "content": text}
             ],
             temperature=0.0,
@@ -479,23 +505,14 @@ async def perform_preflight_check(text: str) -> str:
         )
         result = response.choices[0].message.content.strip().lower()
         # Clean up any stray punctuation or extra words
-        for word in ['safe', 'abuse', 'critical', 'non_english']:
+        for word in ['safe', 'abuse', 'critical', 'non_english', 'off_topic']:
             if word in result:
                 return word
         return "safe"
     except Exception as e:
-        logger.error(f"Pre-flight check failed: {e}. Falling back to Regex Blockade.")
-        
-        # SECOND LAYER OF DEFENSE: Regex Backup
-        text_lower = text.lower()
-        if any(re.search(pat, text_lower) for pat in ABUSIVE_PATTERNS):
-            return "abuse"
-        if any(re.search(pat, text_lower) for pat in CRISIS_PATTERNS):
-            return "critical"
-        if any(re.search(pat, text_lower) for pat in NON_ENGLISH_PATTERNS):
-            return "non_english"
-            
-        return "safe" # Final fallback if LLM is down AND no obvious regex flags.
+        logger.error(f"Pre-flight check failed: {e}. Relying on Regex pre-checks.")
+        # We already ran the regex check above, so if we reach here and LLM failed, we assume safe
+        return "safe"
 
 # ---------------------------------------------------------
 # 7. THE MASTER ENDPOINTS
@@ -526,7 +543,27 @@ async def analyze_multimodal(
         if not any([text, audio, image, video]): raise HTTPException(status_code=400, detail="Provide input.")
 
         # 1. Manage Session State
-        if not session_id:
+        if session_id:
+            stmt = select(ChatSession).where(ChatSession.session_id == session_id)
+            result = await db.execute(stmt)
+            existing_session = result.scalars().first()
+            
+            if not existing_session:
+                # Database wiped in dev but Flutter kept local ID. Recreate it seamlessly.
+                session_title = (text[:30] + "...") if text else "New Conversation"
+                new_session = ChatSession(session_id=session_id, user_email=user_email, title=session_title)
+                db.add(new_session)
+                await db.commit()
+            elif existing_session.user_email != user_email:
+                # SECURITY BLOCK (IDOR): Hacker attempting to inject into another user's chat. 
+                # Create a new blank session for the hacker instead of crashing Flutter.
+                logger.warning(f"IDOR Prevented: {user_email} attempted to inject into chat {session_id}")
+                session_id = str(uuid.uuid4())
+                session_title = (text[:30] + "...") if text else "New Conversation"
+                new_session = ChatSession(session_id=session_id, user_email=user_email, title=session_title)
+                db.add(new_session)
+                await db.commit()
+        else:
             session_id = str(uuid.uuid4())
             session_title = (text[:30] + "...") if text else "New Conversation"
             new_session = ChatSession(session_id=session_id, user_email=user_email, title=session_title)
@@ -550,13 +587,18 @@ async def analyze_multimodal(
         # Clean Whisper Hallucinations (e.g., if it just outputs "[Silence]", "(Music)", or empty space)
         if text:
             clean_text_check = re.sub(r'\[.*?\]|\(.*?\)', '', text).strip()
-            if len(clean_text_check) < 2:
+            # Whisper known pure hallucinations on silent audio:
+            phantom_filter = clean_text_check.lower().replace(".", "").replace("!", "").strip()
+            hallucinations = ["thank you for watching", "subscribe to my channel", "thanks for watching", "thank you", "you"]
+            
+            if len(clean_text_check) < 2 or phantom_filter in hallucinations:
                 text = None # Treat as empty if it's just background noise
 
         # ---------------------------------------------------------
         # PRE-FLIGHT SAFETY GATE (CIRCUIT BREAKER)
         # ---------------------------------------------------------
         is_critical_override = False
+        preflight_status = "safe"
         fused_emotion = "neutral"
         raw_api_data = {}
 
@@ -608,8 +650,12 @@ async def analyze_multimodal(
         result = await db.execute(stmt)
         chat_history = list(reversed(result.scalars().all()))
 
-        # Send the fused emotion (or "high_alert") straight to the LLM
-        llm_response = await generate_psychologist_response(fused_emotion, text, chat_history)
+        # Send the fused emotion (and safety trigger reason) straight to the LLM
+        llm_emotion = fused_emotion
+        if fused_emotion == "high_alert" and preflight_status != "safe":
+            llm_emotion = f"high_alert ({preflight_status})"
+            
+        llm_response = await generate_psychologist_response(llm_emotion, text, chat_history)
 
         # ---------------------------------------------------------
         # 6. Save History & Return Response
