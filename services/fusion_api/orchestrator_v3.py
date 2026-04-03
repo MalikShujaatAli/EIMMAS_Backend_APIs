@@ -471,7 +471,7 @@ async def perform_preflight_check(text: str) -> str:
         response = await groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "Classify text into exactly one word: 'abuse', 'critical', 'non_english', or 'safe'. 'critical' is for suicide/self-harm. 'non_english' includes any language other than English. Respond only with the word."},
+                {"role": "system", "content": "Classify text into exactly one word: 'abuse', 'critical', 'non_english', or 'safe'. 'critical' is STRICTLY for explicit expressions of suicide, self-harm, or severe physical danger. General sadness or negative emotions MUST be classified as 'safe'. 'non_english' includes Roman Urdu/Hindi. Respond only with the word."},
                 {"role": "user", "content": text}
             ],
             temperature=0.0,
