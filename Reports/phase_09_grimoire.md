@@ -1,5 +1,7 @@
 # Phase 9 Grimoire: Complete Technical Archaeology
 
+**Cross-references:** Constant and function lineage → `99_validation_matrix.md`. Training metrics and notebook archaeology → `model_training_archaeology.md`. Narrative thesis → `phase_09_thesis.md`. Publication PDF source → `main.tex` (same `Reports/` folder).
+
 ---
 
 ## Header 1: Complete File Inventory
@@ -19,7 +21,7 @@
 
 ## Header 2: Line-by-Line Logic Migration
 
-Due to the scale of Phase 9 files (235+ lines each, orchestrator at 651 lines), this grimoire documents the **specific code blocks that represent evolutionary leaps from all previous phases**, with cross-references to the exact Phase/file they replace.
+Due to the scale of Phase 9 files (modality APIs often 200--400+ lines; `orchestrator_v3.py` ~750 lines as of last sync), this grimoire documents the **specific code blocks that represent evolutionary leaps from all previous phases**, with cross-references to the exact Phase/file they replace.
 
 ---
 

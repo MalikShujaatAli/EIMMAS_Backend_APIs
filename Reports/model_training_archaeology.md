@@ -3,7 +3,11 @@
 ---
 
 ## Overview
-This document preserves the **complete model training history** across every iteration — from the earliest Phase 1 FER2013 CNN, through each model format migration, to the final production Kaggle-trained models. Training data was extracted from:
+This document preserves the **complete model training history** across every iteration — from the earliest Phase 1 FER2013 CNN, through each model format migration, to the final production Kaggle-trained models.
+
+**Where weights run in production:** Checkpoints `text_best_model.keras`, `fer_best_model.keras`, and `audio_model.tflite` / `audio_best_model.keras` are loaded by **`services/`** (see `99_validation_matrix.md` §5–6 for filenames and ports).
+
+Training data was extracted from:
 - **`training_models_old_apis_dump.txt`** (128KB, 2697 lines) — Complete Kaggle notebook dump for the FERPlus CNN
 - **`training_models_notebook_dump.txt`** — Kaggle training code for Audio BiLSTM and Text BiLSTM+Attention
 - **`phase01_vision_cnn_notebook.ipynb`** (222KB, 2 code cells) — Phase 1 CNN training notebook with full training logs and evaluation output

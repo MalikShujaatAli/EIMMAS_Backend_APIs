@@ -122,3 +122,16 @@ This document traces the complete lineage of every function, class, configuratio
 | Orchestrator | — | — | — | — | — | 8003 |
 
 Note: In Phase 7, both Audio and Video used port 8002 (they were never meant to run simultaneously — they were separate experiments). Phase 9 resolved this by giving Audio port 8000 and Video port 8002.
+
+---
+
+## 7. LaTeX paper (`Reports/main.tex`) cross-walk
+
+| Topic | `main.tex` labels (compile to numbered refs) | Markdown / code source |
+|---|---|---|
+| Fusion weights 0.50 / 0.35 / 0.15 | `eq:fusion`, `fig:weights` | `services/fusion_api/orchestrator_v3.py` `WEIGHTS` |
+| Ports 8000--8003 | traceability paragraph, `tab:specs` | This matrix §6; `00_chronology_index.md` Phase 9 table |
+| Vision 81.03%, per-class F1 | `tab:quant`, `fig:visionf1` | `model_training_archaeology.md` §1.3 |
+| Text 94.04%, typo fix | abstract, `tab:quant` | `training_models_notebook_dump.txt`; `model_training_archaeology.md` |
+| Safety regex categories | `tab:regex` | `orchestrator_v3.py` compiled patterns (paper summarizes intent only) |
+| Phase history | model evolution sections | `00_chronology_index.md`, `FYP old/phase09_fusion_orchestrator_v*.py` |
